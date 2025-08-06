@@ -68,8 +68,9 @@ class FestivalPlanner {
 	setupRealTimeListener() {
 		if (this.firebaseService) {
 			this.unsubscribe = this.firebaseService.onAttendeesChange(
-				(attendeesMap) => {
+				(attendeesMap, statesMap) => {
 					this.attendees = attendeesMap;
+					this.attendeeStates = statesMap;
 					this.renderAttendees();
 				}
 			);
@@ -530,7 +531,7 @@ class FestivalPlanner {
 
 	async addAttendee(showId, name) {
 		if (this.firebaseService) {
-			await this.firebaseService.saveAttendee(showId, name);
+			await this.firebaseService.saveAttendee(showId, name, "normal");
 		} else {
 			// Fallback to localStorage
 			if (!this.attendees.has(showId)) {
@@ -739,11 +740,10 @@ class FestivalPlanner {
 		if (this.firebaseService) {
 			try {
 				const data = await this.firebaseService.getAllData();
-				this.attendees = new Map(Object.entries(data.attendees || {}));
-				this.attendeeStates = new Map(
-					Object.entries(data.attendeeStates || {})
-				);
-				this.comments = new Map(Object.entries(data.comments || {}));
+				// Firebase returns Map objects, so we need to handle them properly
+				this.attendees = data.attendees || new Map();
+				this.attendeeStates = data.attendeeStates || new Map();
+				this.comments = data.comments || new Map();
 			} catch (error) {
 				console.error("Error loading data from Firebase:", error);
 				this.attendees = new Map();
@@ -1539,6 +1539,11 @@ class FestivalPlanner {
 			this.attendeeStates.set(showId, new Map());
 		}
 		this.attendeeStates.get(showId).set(name, state);
+
+		// Also save to Firebase if available
+		if (this.firebaseService) {
+			this.firebaseService.saveAttendeeState(showId, name, state);
+		}
 	}
 
 	// Toggle attendee state (normal -> must-see -> deleted -> normal)

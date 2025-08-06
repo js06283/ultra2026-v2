@@ -55,7 +55,7 @@ async function initializeFirebase() {
 			}
 
 			// Save attendee data for a specific show
-			async saveAttendee(showId, attendeeName) {
+			async saveAttendee(showId, attendeeName, state = "normal") {
 				try {
 					const docRef = doc(
 						this.db,
@@ -65,11 +65,37 @@ async function initializeFirebase() {
 					await setDoc(docRef, {
 						showId: showId,
 						attendeeName: attendeeName,
+						state: state,
 						timestamp: new Date().toISOString(),
 					});
 					return true;
 				} catch (error) {
 					console.error("Error saving attendee:", error);
+					return false;
+				}
+			}
+
+			// Save attendee state for a specific show
+			async saveAttendeeState(showId, attendeeName, state) {
+				try {
+					const docRef = doc(
+						this.db,
+						this.collections.ATTENDEES,
+						`${showId}_${attendeeName}`
+					);
+					await setDoc(
+						docRef,
+						{
+							showId: showId,
+							attendeeName: attendeeName,
+							state: state,
+							timestamp: new Date().toISOString(),
+						},
+						{ merge: true }
+					);
+					return true;
+				} catch (error) {
+					console.error("Error saving attendee state:", error);
 					return false;
 				}
 			}
@@ -149,6 +175,32 @@ async function initializeFirebase() {
 					return attendeesMap;
 				} catch (error) {
 					console.error("Error getting all attendees data:", error);
+					return new Map();
+				}
+			}
+
+			// Get all attendee states data as a Map
+			async getAllAttendeeStates() {
+				try {
+					const querySnapshot = await getDocs(
+						collection(this.db, this.collections.ATTENDEES)
+					);
+					const statesMap = new Map();
+
+					querySnapshot.forEach((doc) => {
+						const data = doc.data();
+						if (!statesMap.has(data.showId)) {
+							statesMap.set(data.showId, new Map());
+						}
+						// Default state is "normal" if not specified
+						statesMap
+							.get(data.showId)
+							.set(data.attendeeName, data.state || "normal");
+					});
+
+					return statesMap;
+				} catch (error) {
+					console.error("Error getting all attendee states data:", error);
 					return new Map();
 				}
 			}
@@ -256,6 +308,7 @@ async function initializeFirebase() {
 					collection(this.db, this.collections.ATTENDEES),
 					(snapshot) => {
 						const attendeesMap = new Map();
+						const statesMap = new Map();
 
 						snapshot.forEach((doc) => {
 							const data = doc.data();
@@ -263,9 +316,17 @@ async function initializeFirebase() {
 								attendeesMap.set(data.showId, new Set());
 							}
 							attendeesMap.get(data.showId).add(data.attendeeName);
+
+							// Also collect states
+							if (!statesMap.has(data.showId)) {
+								statesMap.set(data.showId, new Map());
+							}
+							statesMap
+								.get(data.showId)
+								.set(data.attendeeName, data.state || "normal");
 						});
 
-						callback(attendeesMap);
+						callback(attendeesMap, statesMap);
 					}
 				);
 			}
