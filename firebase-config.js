@@ -70,7 +70,7 @@ async function initializeFirebase() {
 					console.log("Testing Firebase connection...");
 					console.log("Testing from domain:", window.location.hostname);
 					console.log("Testing from protocol:", window.location.protocol);
-					
+
 					const testDoc = doc(this.db, "test", "connection");
 					await setDoc(testDoc, { timestamp: new Date().toISOString() });
 					await deleteDoc(testDoc);
@@ -78,18 +78,42 @@ async function initializeFirebase() {
 					return true;
 				} catch (error) {
 					console.error("Firebase connection test failed:", error);
-					
+
 					// Provide helpful error messages for common issues
-					if (error.code === 'permission-denied') {
-						console.error("Permission denied. Check Firestore security rules.");
-					} else if (error.code === 'unavailable') {
-						console.error("Firebase service unavailable. Check your internet connection.");
-					} else if (error.message && error.message.includes('CORS')) {
-						console.error("CORS error. Check if the domain is authorized in Firebase project settings.");
-					} else if (error.message && error.message.includes('auth')) {
-						console.error("Authentication error. Check Firebase project configuration.");
+					if (error.code === "permission-denied") {
+						console.error(
+							"❌ PERMISSION DENIED: Firestore security rules are blocking access."
+						);
+						console.error(
+							"🔧 SOLUTION: Update your Firestore security rules in Firebase Console:"
+						);
+						console.error("   1. Go to https://console.firebase.google.com/");
+						console.error("   2. Select your project (elements-0)");
+						console.error("   3. Click 'Firestore Database' > 'Rules'");
+						console.error("   4. Replace rules with:");
+						console.error("   rules_version = '2';");
+						console.error("   service cloud.firestore {");
+						console.error("     match /databases/{database}/documents {");
+						console.error("       match /{document=**} {");
+						console.error("         allow read, write: if true;");
+						console.error("       }");
+						console.error("     }");
+						console.error("   }");
+						console.error("   5. Click 'Publish'");
+					} else if (error.code === "unavailable") {
+						console.error(
+							"Firebase service unavailable. Check your internet connection."
+						);
+					} else if (error.message && error.message.includes("CORS")) {
+						console.error(
+							"CORS error. Check if the domain is authorized in Firebase project settings."
+						);
+					} else if (error.message && error.message.includes("auth")) {
+						console.error(
+							"Authentication error. Check Firebase project configuration."
+						);
 					}
-					
+
 					return false;
 				}
 			}
@@ -97,25 +121,31 @@ async function initializeFirebase() {
 			// Diagnostic method to help identify deployment issues
 			async diagnoseIssues() {
 				const issues = [];
-				
+
 				// Check domain
 				const domain = window.location.hostname;
-				if (domain !== 'localhost' && domain !== '127.0.0.1') {
-					issues.push(`Domain '${domain}' might not be authorized in Firebase project settings`);
+				if (domain !== "localhost" && domain !== "127.0.0.1") {
+					issues.push(
+						`Domain '${domain}' might not be authorized in Firebase project settings`
+					);
 				}
-				
+
 				// Check protocol
 				const protocol = window.location.protocol;
-				if (protocol !== 'https:' && domain !== 'localhost' && domain !== '127.0.0.1') {
-					issues.push('Firebase requires HTTPS in production environments');
+				if (
+					protocol !== "https:" &&
+					domain !== "localhost" &&
+					domain !== "127.0.0.1"
+				) {
+					issues.push("Firebase requires HTTPS in production environments");
 				}
-				
+
 				// Test connection
 				const connectionTest = await this.testConnection();
 				if (!connectionTest) {
-					issues.push('Firebase connection test failed');
+					issues.push("Firebase connection test failed");
 				}
-				
+
 				return issues;
 			}
 

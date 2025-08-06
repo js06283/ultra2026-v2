@@ -366,6 +366,9 @@ class FestivalPlanner {
 
 		// Add chronological view to the grid (don't clear existing content)
 		festivalGrid.appendChild(chronologicalView);
+
+		// Render attendees for the chronological view
+		this.renderAttendees();
 	}
 
 	// Show stage view (original view)
@@ -562,13 +565,15 @@ class FestivalPlanner {
 				// Re-add the attendee by toggling the state
 				const newState = this.toggleAttendeeState(showId, this.currentName);
 				if (newState === "normal") {
-					this.createAttendeeElement(attendeesContainer, this.currentName);
+					// Let renderAttendees handle the UI update
+					this.renderAttendees();
 					await this.saveData();
 				}
 			} else {
 				// Add new attendee
 				await this.addAttendee(showId, this.currentName);
-				this.createAttendeeElement(attendeesContainer, this.currentName);
+				// Let renderAttendees handle the UI update
+				this.renderAttendees();
 			}
 		}
 	}
@@ -719,7 +724,7 @@ class FestivalPlanner {
 			return;
 		}
 
-		// Render attendees for all shows
+		// Render attendees for all shows (stage view)
 		document.querySelectorAll(".show").forEach((show) => {
 			const showId = show.dataset.show;
 			if (!showId) return;
@@ -742,6 +747,49 @@ class FestivalPlanner {
 
 			// Add comments functionality if not already present
 			this.addCommentsToShow(show);
+		});
+
+		// Render attendees for chronological view
+		document.querySelectorAll(".chronological-show").forEach((show) => {
+			const showId = show.dataset.show;
+			if (!showId) return;
+
+			const attendeesContainer = show.querySelector(
+				".chronological-show-attendees"
+			);
+			if (!attendeesContainer) return;
+
+			// Clear existing attendees
+			attendeesContainer.innerHTML = "";
+
+			// Add attendees if any
+			if (this.attendees.has(showId)) {
+				this.attendees.get(showId).forEach((attendee) => {
+					const state = this.getAttendeeState(showId, attendee);
+					if (state !== "deleted") {
+						const attendeeElement = document.createElement("span");
+						attendeeElement.className = "attendee";
+						attendeeElement.dataset.name = attendee;
+						attendeeElement.dataset.state = state;
+
+						// Set background color based on person
+						const personColor = this.getPersonColor(attendee);
+						attendeeElement.style.background = personColor;
+
+						// Darken color if must-see
+						if (state === "must-see") {
+							attendeeElement.style.background = this.darkenColor(
+								personColor,
+								0.3
+							);
+							attendeeElement.classList.add("must-see");
+						}
+
+						attendeeElement.textContent = attendee;
+						attendeesContainer.appendChild(attendeeElement);
+					}
+				});
+			}
 		});
 	}
 
@@ -1356,38 +1404,9 @@ class FestivalPlanner {
 		dayBadge.className = "chronological-show-day";
 		dayBadge.textContent = show.originalDay || show.day;
 
-		// Create attendees section
+		// Create attendees section (empty - will be populated by renderAttendees)
 		const attendeesSection = document.createElement("div");
 		attendeesSection.className = "chronological-show-attendees";
-
-		// Add attendees if any
-		if (this.attendees.has(show.id)) {
-			this.attendees.get(show.id).forEach((attendee) => {
-				const state = this.getAttendeeState(show.id, attendee);
-				if (state !== "deleted") {
-					const attendeeElement = document.createElement("span");
-					attendeeElement.className = "attendee";
-					attendeeElement.dataset.name = attendee;
-					attendeeElement.dataset.state = state;
-
-					// Set background color based on person
-					const personColor = this.getPersonColor(attendee);
-					attendeeElement.style.background = personColor;
-
-					// Darken color if must-see
-					if (state === "must-see") {
-						attendeeElement.style.background = this.darkenColor(
-							personColor,
-							0.3
-						);
-						attendeeElement.classList.add("must-see");
-					}
-
-					attendeeElement.textContent = attendee;
-					attendeesSection.appendChild(attendeeElement);
-				}
-			});
-		}
 
 		// Create comments section
 		const commentsSection = document.createElement("div");
@@ -1466,40 +1485,18 @@ class FestivalPlanner {
 				// Re-add the attendee by toggling the state
 				const newState = this.toggleAttendeeState(showId, this.currentName);
 				if (newState === "normal") {
-					// Create and add attendee element
-					const attendeeElement = document.createElement("span");
-					attendeeElement.className = "attendee";
-					attendeeElement.dataset.name = this.currentName;
-					attendeeElement.dataset.state = "normal";
-
-					// Set background color based on person
-					const personColor = this.getPersonColor(this.currentName);
-					attendeeElement.style.background = personColor;
-
-					attendeeElement.textContent = this.currentName;
-					attendeesSection.appendChild(attendeeElement);
+					// Let renderAttendees handle the UI update
+					this.renderAttendees();
 					await this.saveData();
 				}
 			} else {
 				// Add new attendee
 				await this.addAttendee(showId, this.currentName);
-
-				// Create and add attendee element
-				const attendeeElement = document.createElement("span");
-				attendeeElement.className = "attendee";
-				attendeeElement.dataset.name = this.currentName;
-				attendeeElement.dataset.state = "normal";
-
-				// Set background color based on person
-				const personColor = this.getPersonColor(this.currentName);
-				attendeeElement.style.background = personColor;
-
-				attendeeElement.textContent = this.currentName;
-				attendeesSection.appendChild(attendeeElement);
+				// Let renderAttendees handle the UI update
+				this.renderAttendees();
 			}
 		}
 		await this.saveData(); // Save data after any change
-		this.renderAttendees(); // Re-render to apply filters and update counts
 	}
 
 	// Toggle comments visibility for a show

@@ -139,9 +139,51 @@ service cloud.firestore {
     match /comments/{document} {
       allow read, write: if true; // Allow all access for now
     }
+    match /test/{document} {
+      allow read, write: if true; // Allow test collection access
+    }
   }
 }
 ```
+
+#### How to Update Security Rules
+
+1. **Go to Firebase Console**:
+
+   - Visit [Firebase Console](https://console.firebase.google.com/)
+   - Select your project (`elements-0`)
+
+2. **Navigate to Firestore Rules**:
+
+   - Click "Firestore Database" in the left sidebar
+   - Click the "Rules" tab
+
+3. **Update the Rules**:
+
+   - Replace the existing rules with the ones above
+   - Click "Publish" to save the changes
+
+4. **Test the Rules**:
+   - Wait a few minutes for the rules to propagate
+   - Refresh your deployed application
+   - Check the browser console for Firebase success messages
+
+#### Alternative: Test Mode Rules
+
+If you want to allow all access temporarily (for testing):
+
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
+```
+
+**⚠️ Warning**: These rules allow anyone to read and write to your database. Only use for testing or development.
 
 ### Environment Variables (Optional)
 
