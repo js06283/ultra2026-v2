@@ -246,10 +246,7 @@ class FestivalPlanner {
 
 	// Remove the choose person message
 	removeChoosePersonMessage() {
-		const festivalGrid = document.querySelector(".festival-grid");
-		const existingMessage = festivalGrid.querySelector(
-			".choose-person-message"
-		);
+		const existingMessage = document.querySelector(".choose-person-message");
 		if (existingMessage) {
 			existingMessage.remove();
 		}
@@ -310,6 +307,11 @@ class FestivalPlanner {
 
 	// Apply current filters (day, My Schedule, and Chronological)
 	applyFilters() {
+		// Remove the choose person message if a person is selected
+		if (this.currentName) {
+			this.removeChoosePersonMessage();
+		}
+
 		if (this.showChronological) {
 			this.showChronologicalView();
 		} else {
@@ -334,9 +336,12 @@ class FestivalPlanner {
 			existingChronologicalView.remove();
 		}
 
+		// Remove any existing choose person message
+		this.removeChoosePersonMessage();
+
 		// Check if My Schedule is enabled but no name is selected
 		if (this.showMySchedule && !this.currentName) {
-			this.showChoosePersonMessage(festivalGrid);
+			this.showChoosePersonMessage();
 			return;
 		}
 
@@ -388,9 +393,12 @@ class FestivalPlanner {
 			chronologicalView.remove();
 		}
 
+		// Remove any existing choose person message
+		this.removeChoosePersonMessage();
+
 		// Check if My Schedule is enabled but no name is selected
 		if (this.showMySchedule && !this.currentName) {
-			this.showChoosePersonMessage(festivalGrid);
+			this.showChoosePersonMessage();
 			return;
 		}
 
@@ -1601,12 +1609,13 @@ class FestivalPlanner {
 	}
 
 	// Show message to choose a person first when My Schedule is enabled but no name is selected
-	showChoosePersonMessage(container) {
-		// Remove any existing message
-		const existingMessage = container.querySelector(".choose-person-message");
-		if (existingMessage) {
-			existingMessage.remove();
-		}
+	showChoosePersonMessage() {
+		// Remove any existing message first
+		this.removeChoosePersonMessage();
+
+		// Get the main container and festival grid
+		const mainContainer = document.querySelector(".container");
+		const festivalGrid = document.querySelector(".festival-grid");
 
 		// Create the message element
 		const messageElement = document.createElement("div");
@@ -1629,8 +1638,8 @@ class FestivalPlanner {
 			</div>
 		`;
 
-		// Add the message to the container
-		container.appendChild(messageElement);
+		// Insert the message before the festival grid
+		mainContainer.insertBefore(messageElement, festivalGrid);
 	}
 
 	// Helper method to check if a show is late-night (12am-6am)
