@@ -118,6 +118,27 @@ class FestivalPlanner {
 					this.renderAttendees();
 				}
 			);
+
+			// Set up comments listener
+			this.commentsUnsubscribe = this.firebaseService.onCommentsChange(
+				(commentsMap) => {
+					this.comments = commentsMap;
+					// Update comments count for all shows
+					this.comments.forEach((commentArray, showId) => {
+						this.updateCommentsCount(showId);
+					});
+					// Re-render comments for open comment sections
+					document
+						.querySelectorAll(".comments-container.show")
+						.forEach((container) => {
+							const showElement = container.closest("[data-show]");
+							if (showElement) {
+								const showId = showElement.dataset.show;
+								this.renderComments(showId);
+							}
+						});
+				}
+			);
 		}
 	}
 
@@ -545,6 +566,9 @@ class FestivalPlanner {
 			commentsSection.appendChild(commentsToggle);
 			showElement.appendChild(commentsSection);
 		}
+
+		// Update the comments count to ensure it's current
+		this.updateCommentsCount(showId);
 	}
 
 	async toggleAttendee(showElement) {
@@ -1286,6 +1310,9 @@ class FestivalPlanner {
 	cleanup() {
 		if (this.unsubscribe) {
 			this.unsubscribe();
+		}
+		if (this.commentsUnsubscribe) {
+			this.commentsUnsubscribe();
 		}
 	}
 
