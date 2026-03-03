@@ -10,13 +10,13 @@ The Firebase configuration in `firebase-config.js` contains **public keys** that
 
 ```javascript
 const firebaseConfig = {
-	apiKey: "REDACTED_FIREBASE_API_KEY", // ✅ Public
-	authDomain: "elements-0.firebaseapp.com", // ✅ Public
-	projectId: "elements-0", // ✅ Public
-	storageBucket: "elements-0.firebasestorage.app", // ✅ Public
-	messagingSenderId: "738816284498", // ✅ Public
-	appId: "1:738816284498:web:9ec55c7a5c4e10d8e38c8b", // ✅ Public
-	measurementId: "G-SML6M24HHY", // ✅ Public
+	apiKey: "REPLACE_WITH_FIREBASE_API_KEY", // ✅ Public
+	authDomain: "REPLACE_WITH_FIREBASE_AUTH_DOMAIN", // ✅ Public
+	projectId: "REPLACE_WITH_FIREBASE_PROJECT_ID", // ✅ Public
+	storageBucket: "REPLACE_WITH_FIREBASE_STORAGE_BUCKET", // ✅ Public
+	messagingSenderId: "REPLACE_WITH_FIREBASE_SENDER_ID", // ✅ Public
+	appId: "REPLACE_WITH_FIREBASE_APP_ID", // ✅ Public
+	measurementId: "REPLACE_WITH_FIREBASE_MEASUREMENT_ID", // ✅ Public
 };
 ```
 

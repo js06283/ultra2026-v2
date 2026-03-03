@@ -3,12 +3,14 @@
 	<head>
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Elements Festival Planner</title>
+		<title>ULTRA</title>
 		<link rel="stylesheet" href="styles.css" />
 		<link
-			href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+			href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Rajdhani:wght@400;500;600;700&display=swap"
 			rel="stylesheet"
 		/>
+		<!-- Railway DB service -->
+		<script src="railway-db-service.js"></script>
 		<!-- Firebase SDK -->
 		<script type="module" src="firebase-config.js"></script>
 		<!-- CSV Parser and Schedule Loader -->
@@ -18,7 +20,7 @@
 	<body>
 		<div class="container">
 			<header class="header">
-				<h1>🎵 Elements Festival Planner</h1>
+				<h1>ULTRA</h1>
 				<div class="name-input-section">
 					<select id="nameSelect" class="name-select">
 						<option value="">Select a name...</option>
@@ -28,6 +30,7 @@
 						<option value="Noel">Noel</option>
 						<option value="Kevin">Kevin</option>
 						<option value="Ellen">Ellen</option>
+						<option value="Cindy">Cindy</option>
 						<option value="PJ">PJ</option>
 						<option value="custom">Other (enter custom name)</option>
 					</select>
@@ -62,7 +65,7 @@
 				<!-- Loading placeholder - will be replaced by real schedule -->
 				<div class="loading-placeholder">
 					<div class="loading-spinner"></div>
-					<p>Loading Elements Festival schedule...</p>
+					<p>Loading ULTRA festival schedule...</p>
 				</div>
 			</div>
 		</div>

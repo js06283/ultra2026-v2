@@ -1,4 +1,4 @@
-// CSV Parser for Elements Festival Schedule
+// CSV Parser for festival schedules
 class FestivalScheduleParser {
 	constructor() {
 		this.schedule = new Map();
@@ -11,6 +11,16 @@ class FestivalScheduleParser {
 	// Parse CSV data
 	parseCSV(csvText) {
 		const lines = csvText.trim().split("\n");
+		if (!lines.length) return this.getOriginalSchedule();
+
+		const headers = this.parseCSVLine(lines[0]).map((header) =>
+			header.replace(/^\ufeff/, "").trim().toLowerCase()
+		);
+		const dayIndex = headers.indexOf("day");
+		const timeIndex = headers.indexOf("time");
+		const stageIndex = headers.indexOf("stage");
+		const artistIndex = headers.indexOf("artist");
+		const genreIndex = headers.indexOf("genre");
 
 		// Skip header row
 		for (let i = 1; i < lines.length; i++) {
@@ -20,13 +30,19 @@ class FestivalScheduleParser {
 			const values = this.parseCSVLine(line);
 
 			if (values.length >= 4) {
-				const day = values[0].trim();
-				const time = values[1].trim();
-				const stage = values[2].trim();
-				const artist = values[3].trim();
+				const day = (values[dayIndex >= 0 ? dayIndex : 0] || "").trim();
+				const time = (values[timeIndex >= 0 ? timeIndex : 1] || "").trim();
+				const stage = (values[stageIndex >= 0 ? stageIndex : 2] || "").trim();
+				const artist = (
+					values[artistIndex >= 0 ? artistIndex : 3] || ""
+				).trim();
+				const genre = (
+					values[genreIndex >= 0 ? genreIndex : values.length > 4 ? 4 : -1] ||
+					""
+				).trim();
 
 				if (day && time && stage && artist) {
-					this.addShow(day, time, stage, artist);
+					this.addShow(day, time, stage, artist, genre);
 				}
 			}
 		}
@@ -58,7 +74,9 @@ class FestivalScheduleParser {
 	}
 
 	// Add a show to the schedule
-	addShow(day, time, stage, artist) {
+	addShow(day, time, stage, artist, genre = "") {
+		const normalizedTime = this.normalizeTime(time);
+
 		this.days.add(day);
 		this.stages.add(stage);
 
@@ -76,8 +94,9 @@ class FestivalScheduleParser {
 		}
 
 		const show = {
-			time: time,
+			time: normalizedTime,
 			artist: artist,
+			genre: genre,
 			id: this.generateShowId(day, stage, artist, time),
 		};
 
@@ -107,14 +126,22 @@ class FestivalScheduleParser {
 		return `show_${dayNum}_${stageSlug}_${artistSlug}_${timeSlug}`;
 	}
 
+	// Normalize time strings for parsing/sorting
+	normalizeTime(timeStr) {
+		return timeStr
+			.replace(/\s+/g, " ")
+			.replace(/\s*([AP]M)/gi, "$1")
+			.replace(/\s*-\s*/g, "-")
+			.trim();
+	}
+
 	// Get day number (1 = Friday, 2 = Saturday, 3 = Sunday)
 	getDayNumber(day) {
-		const dayMap = {
-			Friday: 1,
-			Saturday: 2,
-			Sunday: 3,
-		};
-		return dayMap[day] || 1;
+		const normalizedDay = (day || "").toLowerCase();
+		if (normalizedDay.includes("friday")) return 1;
+		if (normalizedDay.includes("saturday")) return 2;
+		if (normalizedDay.includes("sunday")) return 3;
+		return 1;
 	}
 
 	// Get sorted schedule
@@ -193,7 +220,9 @@ class FestivalScheduleParser {
 		const time = timeStr.toUpperCase();
 
 		// Handle time ranges like "3:30PM-4:20PM" or "11:30PM-1:00AM"
-		const rangeMatch = time.match(/(\d+):(\d+)(AM|PM)-(\d+):(\d+)(AM|PM)/);
+		const rangeMatch = time.match(
+			/(\d+):(\d+)\s*(AM|PM)\s*-\s*(\d+):(\d+)\s*(AM|PM)/
+		);
 		if (rangeMatch) {
 			let startHours = parseInt(rangeMatch[1]);
 			const startMinutes = parseInt(rangeMatch[2]);
@@ -226,7 +255,7 @@ class FestivalScheduleParser {
 		}
 
 		// Handle single times like "3:00PM"
-		const match = time.match(/(\d+):(\d+)(AM|PM)/);
+		const match = time.match(/(\d+):(\d+)\s*(AM|PM)/);
 		if (match) {
 			let hours = parseInt(match[1]);
 			const minutes = parseInt(match[2]);
@@ -249,7 +278,9 @@ class FestivalScheduleParser {
 		const time = timeStr.toUpperCase();
 
 		// Handle time ranges like "3:30PM-4:20PM" or "11:30PM-1:00AM"
-		const rangeMatch = time.match(/(\d+):(\d+)(AM|PM)-(\d+):(\d+)(AM|PM)/);
+		const rangeMatch = time.match(
+			/(\d+):(\d+)\s*(AM|PM)\s*-\s*(\d+):(\d+)\s*(AM|PM)/
+		);
 		if (rangeMatch) {
 			let startHours = parseInt(rangeMatch[1]);
 			const startMinutes = parseInt(rangeMatch[2]);
@@ -359,9 +390,46 @@ class FestivalScheduleParser {
 		return timeStr;
 	}
 
+	// Format stage label and avoid duplicated "Stage"
+	formatStageLabel(stage) {
+		return /stage/i.test(stage) ? stage : `${stage} Stage`;
+	}
+
+	// Normalize stage keys for dataset/css usage
+	normalizeStageKey(stage) {
+		return (stage || "unknown")
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, "-")
+			.replace(/^-|-$/g, "");
+	}
+
+	// Build unique colors for each stage
+	generateStageColorMap(schedule) {
+		const allStages = [];
+		for (const [, stages] of schedule) {
+			for (const [stage] of stages) {
+				if (!allStages.includes(stage)) allStages.push(stage);
+			}
+		}
+
+		const colorMap = new Map();
+		const count = Math.max(allStages.length, 1);
+		allStages.forEach((stage, index) => {
+			// Distribute hues across the wheel with fixed saturation/lightness.
+			const hue = Math.round((index * 360) / count);
+			colorMap.set(stage, {
+				base: `hsl(${hue} 78% 52%)`,
+				dark: `hsl(${hue} 78% 42%)`,
+			});
+		});
+
+		return colorMap;
+	}
+
 	// Generate HTML for the festival schedule
 	generateHTML() {
 		const schedule = this.getOriginalSchedule();
+		const stageColors = this.generateStageColorMap(schedule);
 		let html = "";
 
 		for (const [day, stages] of schedule) {
@@ -375,22 +443,36 @@ class FestivalScheduleParser {
             `;
 
 			for (const [stage, shows] of stages) {
+				const stageLabel = this.formatStageLabel(stage);
+				const stageKey = this.normalizeStageKey(stage);
+				const stageColor = stageColors.get(stage) || {
+					base: "hsl(220 70% 55%)",
+					dark: "hsl(220 70% 45%)",
+				};
 				html += `
-                    <div class="stage" data-stage="${stage.toLowerCase()}" data-day="${dayNumber}">
-                        <h3 class="stage-title">${stage} Stage</h3>
+                    <div class="stage" data-stage="${stageKey}" data-day="${dayNumber}" style="--stage-color: ${stageColor.base}; --stage-color-dark: ${stageColor.dark};">
+                        <h3 class="stage-title">${this.escapeHtml(stageLabel)}</h3>
                         <div class="shows">
                 `;
 
 				for (const show of shows) {
 					const formattedTime = this.formatTimeForDisplay(show.time);
+					const escapedGenre = this.escapeHtml(show.genre || "");
 					html += `
                         <div class="show" data-show="${show.id}" data-time="${
 						show.time
-					}">
+					}" data-genre="${escapedGenre}">
                             <div class="show-header">
-                                <span class="show-title">${this.escapeHtml(
-																	show.artist
-																)}</span>
+                                <div class="show-meta">
+                                    <span class="show-title">${this.escapeHtml(
+																			show.artist
+																		)}</span>
+                                    ${
+																			show.genre
+																				? `<span class="genre-tag">${escapedGenre}</span>`
+																				: ""
+																		}
+                                </div>
                                 <span class="show-time">${formattedTime}</span>
                             </div>
                             <div class="attendees"></div>

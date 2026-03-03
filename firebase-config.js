@@ -31,15 +31,21 @@ async function initializeFirebase() {
 		// Replace these values with your actual Firebase project configuration
 		// NOTE: These are public keys and are safe to expose in client-side code
 		// Firebase security is handled through Firestore Security Rules and Authentication
-		const firebaseConfig = {
-			apiKey: "REDACTED_FIREBASE_API_KEY",
-			authDomain: "elements-0.firebaseapp.com",
-			projectId: "elements-0",
-			storageBucket: "elements-0.firebasestorage.app",
-			messagingSenderId: "738816284498",
-			appId: "1:738816284498:web:9ec55c7a5c4e10d8e38c8b",
-			measurementId: "G-SML6M24HHY",
+		const firebaseConfig = window.FIREBASE_CONFIG || {
+			apiKey: "REPLACE_WITH_FIREBASE_API_KEY",
+			authDomain: "REPLACE_WITH_FIREBASE_AUTH_DOMAIN",
+			projectId: "REPLACE_WITH_FIREBASE_PROJECT_ID",
+			storageBucket: "REPLACE_WITH_FIREBASE_STORAGE_BUCKET",
+			messagingSenderId: "REPLACE_WITH_FIREBASE_SENDER_ID",
+			appId: "REPLACE_WITH_FIREBASE_APP_ID",
+			measurementId: "REPLACE_WITH_FIREBASE_MEASUREMENT_ID",
 		};
+
+		if (!firebaseConfig.apiKey || firebaseConfig.apiKey.startsWith("REPLACE_")) {
+			throw new Error(
+				"Firebase config placeholders detected. Set window.FIREBASE_CONFIG before firebase-config.js loads."
+			);
+		}
 
 		console.log("Initializing Firebase app...");
 		// Initialize Firebase
@@ -533,6 +539,9 @@ async function initializeFirebase() {
 }
 
 // Initialize Firebase and export the service
+if (window.__USE_RAILWAY_DB__) {
+	console.log("Railway DB service detected; skipping Firebase initialization.");
+} else {
 console.log("Starting Firebase service initialization...");
 initializeFirebase()
 	.then((serviceClass) => {
@@ -548,3 +557,4 @@ initializeFirebase()
 		console.error("Failed to initialize Firebase:", error);
 		window.FirebaseService = null;
 	});
+}

@@ -2,10 +2,10 @@
 	"name": "elements-festival-planner",
 	"version": "1.0.0",
 	"description": "A festival planning application for Elements Festival",
-	"main": "index.html",
+	"main": "server.js",
 	"scripts": {
-		"start": "python3 -m http.server 8000",
-		"dev": "python3 -m http.server 8000"
+		"start": "node server.js",
+		"dev": "node server.js"
 	},
 	"keywords": [
 		"festival",
@@ -15,6 +15,10 @@
 	],
 	"author": "Your Name",
 	"license": "MIT",
+	"dependencies": {
+		"express": "^4.21.2",
+		"pg": "^8.16.3"
+	},
 	"engines": {
 		"node": ">=14.0.0"
 	}

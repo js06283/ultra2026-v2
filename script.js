@@ -1329,8 +1329,19 @@ class FestivalPlanner {
 				const showId = show.dataset.show;
 				const showTitle = show.querySelector(".show-title").textContent;
 				const showTime = show.querySelector(".show-time").textContent;
+				const showGenre = show.dataset.genre || "";
 				const stageElement = show.closest(".stage");
-				const stage = stageElement ? stageElement.dataset.stage : "unknown";
+				const stageName =
+					stageElement?.querySelector(".stage-title")?.textContent?.trim() ||
+					stageElement?.dataset.stage ||
+					"Unknown Stage";
+				const rawStageKeySource = stageElement?.dataset.stage || stageName;
+				const stageKey = rawStageKeySource
+					.toLowerCase()
+					.replace(/[^a-z0-9]+/g, "-")
+					.replace(/^-|-$/g, "");
+				const stageColor =
+					stageElement?.style.getPropertyValue("--stage-color").trim() || "";
 
 				// Parse time for sorting and handle late-night shows
 				const { timeInMinutes, adjustedDay } = this.parseTimeForSorting(
@@ -1341,9 +1352,12 @@ class FestivalPlanner {
 				shows.push({
 					id: showId,
 					title: showTitle,
+					genre: showGenre,
 					time: showTime,
 					timeInMinutes: timeInMinutes,
-					stage: stage,
+					stage: stageKey,
+					stageName: stageName,
+					stageColor: stageColor,
 					day: adjustedDay, // Use adjusted day for sorting
 					originalDay: dayTitle, // Keep original day for display
 					element: show,
@@ -1371,7 +1385,7 @@ class FestivalPlanner {
 	// Also handles late-night shows (12am-6am) by treating them as part of the next day for sorting
 	parseTimeForSorting(timeStr, currentDay) {
 		// Handle time ranges like "3:30PM-4:20PM" or "11:30PM-1:00AM"
-		const timeMatch = timeStr.match(/(\d+):(\d+)(AM|PM)/);
+		const timeMatch = timeStr.match(/(\d+):(\d+)\s*(AM|PM)/);
 		if (!timeMatch) return { timeInMinutes: 0, adjustedDay: currentDay };
 
 		let hours = parseInt(timeMatch[1]);
@@ -1427,18 +1441,27 @@ class FestivalPlanner {
 		showElement.className = "chronological-show";
 		showElement.dataset.show = show.id;
 		showElement.dataset.stage = show.stage;
+		if (show.stageColor) {
+			showElement.style.setProperty("--stage-color", show.stageColor);
+		}
 
 		// Create artist box with stage color
 		const artistBox = document.createElement("div");
-		artistBox.className = `artist-box ${show.stage}`;
+		artistBox.className = "artist-box";
+		artistBox.dataset.stage = show.stage;
+		if (show.stageColor) {
+			artistBox.style.background = show.stageColor;
+		}
 		artistBox.textContent = show.title;
 
 		// Create show info (without duplicate artist name)
 		const showInfo = document.createElement("div");
 		showInfo.className = "chronological-show-info";
+		const stageLabel = show.stageName || show.stage;
 		showInfo.innerHTML = `
 			<div class="chronological-show-time">${show.time}</div>
-			<div class="chronological-show-stage">${show.stage} Stage</div>
+			<div class="chronological-show-stage">${this.escapeHtml(stageLabel)}</div>
+			${show.genre ? `<div class="genre-tag">${this.escapeHtml(show.genre)}</div>` : ""}
 		`;
 
 		// Create attendees section (empty - will be populated by renderAttendees)

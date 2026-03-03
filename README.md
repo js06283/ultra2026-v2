@@ -150,6 +150,12 @@ attendees/
    - If using a local server: `http://localhost:8000`
    - If opening directly: `file:///path/to/index.html`
 
+## Railway Deployment with Database
+
+For Railway + PostgreSQL deployment instructions, see:
+
+- `RAILWAY_SETUP.md`
+
 ## File Structure
 
 ```
