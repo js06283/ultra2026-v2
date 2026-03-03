@@ -1,4 +1,4 @@
-// Railway-backed service that matches the existing FirebaseService interface.
+// Railway-backed service that matches the existing AppDataService interface.
 (function () {
 	const API_BASE =
 		window.RAILWAY_API_BASE ||
@@ -157,8 +157,11 @@
 			const run = async () => {
 				if (!active) return;
 				try {
-					const data = await this.getAllAttendeesData();
-					callback(data);
+					const [attendeesMap, statesMap] = await Promise.all([
+						this.getAllAttendeesData(),
+						this.getAllAttendeeStates(),
+					]);
+					callback(attendeesMap, statesMap);
 				} catch (error) {
 					console.error("Attendees polling failed:", error);
 				}
@@ -211,6 +214,6 @@
 	}
 
 	window.__USE_RAILWAY_DB__ = true;
-	window.FirebaseService = RailwayDBService;
+	window.AppDataService = RailwayDBService;
 	console.log("Railway DB service initialized");
 })();

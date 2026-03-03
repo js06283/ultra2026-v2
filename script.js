@@ -8,7 +8,7 @@ class FestivalPlanner {
 		this.showMySchedule = false;
 		this.showChronological = false;
 		this.scheduleLoaded = false;
-		this.firebaseService = null;
+		this.dataService = null;
 		this.unsubscribe = null;
 
 		// Unique colors for each person
@@ -27,57 +27,52 @@ class FestivalPlanner {
 	}
 
 	async init() {
-		// Wait for Firebase to be available
+		// Wait for data service to be available
 		let attempts = 0;
 		const maxAttempts = 50; // Wait up to 5 seconds (50 * 100ms)
 
-		while (!window.FirebaseService && attempts < maxAttempts) {
+		while (!window.AppDataService && attempts < maxAttempts) {
 			await new Promise((resolve) => setTimeout(resolve, 100));
 			attempts++;
 		}
 
-		// Initialize Firebase service
-		if (window.FirebaseService) {
+		// Initialize Railway data service
+		if (window.AppDataService) {
 			try {
-				this.firebaseService = new window.FirebaseService();
+				this.dataService = new window.AppDataService();
 
-				// Test Firebase connection
-				const connectionTest = await this.firebaseService.testConnection();
+				// Test data service connection
+				const connectionTest = await this.dataService.testConnection();
 				if (!connectionTest) {
 					console.warn(
-						"Firebase connection test failed, falling back to localStorage"
+						"Data service connection test failed, falling back to localStorage"
 					);
-					console.warn(
-						"This is normal for deployed versions if the domain is not authorized in Firebase project settings."
-					);
+					console.warn("Railway API may be unavailable.");
 
 					// Run diagnostics to help identify the issue
-					const issues = await this.firebaseService.diagnoseIssues();
+					const issues = await this.dataService.diagnoseIssues();
 					if (issues.length > 0) {
-						console.warn("Firebase deployment issues detected:");
+						console.warn("Data service deployment issues detected:");
 						issues.forEach((issue) => console.warn("- " + issue));
 					}
 
-					this.firebaseService = null;
+					this.dataService = null;
 					this.loadData();
 				} else {
 					await this.loadData();
 					this.setupRealTimeListener();
-					console.log("Firebase initialized successfully");
+					console.log("Data service initialized successfully");
 				}
 			} catch (error) {
-				console.error("Error initializing Firebase service:", error);
+				console.error("Error initializing data service:", error);
 				console.warn(
-					"Falling back to localStorage due to Firebase initialization error"
+					"Falling back to localStorage due to data service initialization error"
 				);
-				this.firebaseService = null;
+				this.dataService = null;
 				this.loadData();
 			}
 		} else {
-			console.warn("Firebase not available, falling back to localStorage");
-			console.warn(
-				"This is normal for deployed versions if Firebase is not configured or the domain is not authorized."
-			);
+			console.warn("Data service not available, falling back to localStorage");
 			this.loadData();
 		}
 		this.setupEventListeners();
@@ -110,17 +105,17 @@ class FestivalPlanner {
 	}
 
 	setupRealTimeListener() {
-		if (this.firebaseService) {
-			this.unsubscribe = this.firebaseService.onAttendeesChange(
+		if (this.dataService) {
+			this.unsubscribe = this.dataService.onAttendeesChange(
 				(attendeesMap, statesMap) => {
 					this.attendees = attendeesMap;
-					this.attendeeStates = statesMap;
+					this.attendeeStates = statesMap || this.attendeeStates || new Map();
 					this.renderAttendees();
 				}
 			);
 
 			// Set up comments listener
-			this.commentsUnsubscribe = this.firebaseService.onCommentsChange(
+			this.commentsUnsubscribe = this.dataService.onCommentsChange(
 				(commentsMap) => {
 					this.comments = commentsMap;
 					// Update comments count for all shows
@@ -618,8 +613,8 @@ class FestivalPlanner {
 	}
 
 	async addAttendee(showId, name) {
-		if (this.firebaseService) {
-			await this.firebaseService.saveAttendee(showId, name, "normal");
+		if (this.dataService) {
+			await this.dataService.saveAttendee(showId, name, "normal");
 		} else {
 			// Fallback to localStorage
 			if (!this.attendees.has(showId)) {
@@ -640,8 +635,8 @@ class FestivalPlanner {
 	}
 
 	async removeAttendee(showId, name) {
-		if (this.firebaseService) {
-			await this.firebaseService.removeAttendee(showId, name);
+		if (this.dataService) {
+			await this.dataService.removeAttendee(showId, name);
 		} else {
 			// Fallback to localStorage
 			if (this.attendees.has(showId)) {
@@ -833,7 +828,7 @@ class FestivalPlanner {
 	}
 
 	async saveData() {
-		if (!this.firebaseService) {
+		if (!this.dataService) {
 			// Fallback to localStorage
 			const data = {
 				attendees: {},
@@ -868,15 +863,15 @@ class FestivalPlanner {
 	}
 
 	async loadData() {
-		if (this.firebaseService) {
+		if (this.dataService) {
 			try {
-				const data = await this.firebaseService.getAllData();
-				// Firebase returns Map objects, so we need to handle them properly
+				const data = await this.dataService.getAllData();
+				// Data service returns Map objects
 				this.attendees = data.attendees || new Map();
-				this.attendeeStates = data.attendeeStates || new Map();
+				this.attendeeStates = data.attendeeStates || data.states || new Map();
 				this.comments = data.comments || new Map();
 			} catch (error) {
-				console.error("Error loading data from Firebase:", error);
+				console.error("Error loading data from data service:", error);
 				this.attendees = new Map();
 				this.attendeeStates = new Map();
 				this.comments = new Map();
@@ -998,8 +993,8 @@ class FestivalPlanner {
 
 	// Method to get all attendees for a specific show
 	async getAttendeesForShow(showId) {
-		if (this.firebaseService) {
-			return await this.firebaseService.getAttendeesForShow(showId);
+		if (this.dataService) {
+			return await this.dataService.getAttendeesForShow(showId);
 		} else {
 			return this.attendees.has(showId)
 				? Array.from(this.attendees.get(showId))
@@ -1009,8 +1004,8 @@ class FestivalPlanner {
 
 	// Method to get all shows for a specific attendee
 	async getShowsForAttendee(name) {
-		if (this.firebaseService) {
-			return await this.firebaseService.getShowsForAttendee(name);
+		if (this.dataService) {
+			return await this.dataService.getShowsForAttendee(name);
 		} else {
 			const shows = [];
 			this.attendees.forEach((attendeeSet, showId) => {
@@ -1024,8 +1019,8 @@ class FestivalPlanner {
 
 	// Method to clear all data
 	async clearAllData() {
-		if (this.firebaseService) {
-			const success = await this.firebaseService.clearAllData();
+		if (this.dataService) {
+			const success = await this.dataService.clearAllData();
 			if (success) {
 				this.attendees.clear();
 				this.attendeeStates.clear();
@@ -1047,8 +1042,8 @@ class FestivalPlanner {
 
 	// Method to export data
 	async exportData() {
-		if (this.firebaseService) {
-			const jsonData = await this.firebaseService.exportData();
+		if (this.dataService) {
+			const jsonData = await this.dataService.exportData();
 			const blob = new Blob([jsonData], {
 				type: "application/json",
 			});
@@ -1101,13 +1096,13 @@ class FestivalPlanner {
 
 	// Method to import data
 	async importData(jsonData) {
-		if (this.firebaseService) {
-			const success = await this.firebaseService.importData(jsonData);
+		if (this.dataService) {
+			const success = await this.dataService.importData(jsonData);
 			if (success) {
-				const data = await this.firebaseService.getAllData();
-				this.attendees = new Map(Object.entries(data.attendees));
-				this.attendeeStates = new Map(Object.entries(data.attendeeStates));
-				this.comments = new Map(Object.entries(data.comments));
+				const data = await this.dataService.getAllData();
+				this.attendees = data.attendees || new Map();
+				this.attendeeStates = data.attendeeStates || data.states || new Map();
+				this.comments = data.comments || new Map();
 				this.renderAttendees();
 				this.showNotification("Data imported successfully", "success");
 			} else {
@@ -1170,8 +1165,8 @@ class FestivalPlanner {
 			timestamp: new Date().toISOString(),
 		};
 
-		if (this.firebaseService) {
-			await this.firebaseService.saveComment(showId, comment);
+		if (this.dataService) {
+			await this.dataService.saveComment(showId, comment);
 		} else {
 			// Fallback to localStorage
 			if (!this.comments.has(showId)) {
@@ -1187,8 +1182,8 @@ class FestivalPlanner {
 
 	// Delete a comment from a show
 	async deleteComment(showId, commentIndex) {
-		if (this.firebaseService) {
-			await this.firebaseService.deleteComment(showId, commentIndex);
+		if (this.dataService) {
+			await this.dataService.deleteComment(showId, commentIndex);
 		} else {
 			// Fallback to localStorage
 			if (this.comments.has(showId)) {
@@ -1617,9 +1612,9 @@ class FestivalPlanner {
 		}
 		this.attendeeStates.get(showId).set(name, state);
 
-		// Also save to Firebase if available
-		if (this.firebaseService) {
-			this.firebaseService.saveAttendeeState(showId, name, state);
+		// Also save to data service if available
+		if (this.dataService) {
+			this.dataService.saveAttendeeState(showId, name, state);
 		}
 	}
 
