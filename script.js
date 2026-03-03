@@ -392,6 +392,32 @@ class FestivalPlanner {
 			chronologicalView.appendChild(showElement);
 		});
 
+		if (
+			this.showMySchedule &&
+			this.currentName &&
+			filteredShows.length === 0
+		) {
+			const emptyState = this.createMyScheduleEmptyState();
+			chronologicalView.appendChild(emptyState);
+		}
+
+		// Prevent empty blank screen when filters return no shows
+		if (
+			filteredShows.length === 0 &&
+			!(this.showMySchedule && this.currentName)
+		) {
+			const emptyState = document.createElement("div");
+			emptyState.className = "choose-person-message";
+			emptyState.innerHTML = `
+				<div class="choose-person-content">
+					<div class="choose-person-icon">📭</div>
+					<h3>No Shows Found</h3>
+					<p>Try changing day filters or turning off My Schedule.</p>
+				</div>
+			`;
+			chronologicalView.appendChild(emptyState);
+		}
+
 		// Add chronological view to the grid (don't clear existing content)
 		festivalGrid.appendChild(chronologicalView);
 
@@ -433,6 +459,14 @@ class FestivalPlanner {
 					}
 				}
 			});
+
+			if (userShows.size === 0) {
+				daySections.forEach((section) => {
+					section.style.display = "none";
+				});
+				this.showMyScheduleEmptyMessage();
+				return;
+			}
 
 			// Show/hide day sections based on current day selection and whether they contain user's shows
 			daySections.forEach((section) => {
@@ -484,6 +518,73 @@ class FestivalPlanner {
 				}
 			});
 		}
+
+		// Prevent empty blank screen when no stage sections are visible.
+		const hasVisibleDay = Array.from(daySections).some(
+			(section) => section.style.display !== "none"
+		);
+		if (!hasVisibleDay) {
+			this.showNoResultsMessage("No shows found for the current filters.");
+		}
+	}
+
+	createMyScheduleEmptyState() {
+		const wrapper = document.createElement("div");
+		wrapper.className = "choose-person-message";
+		wrapper.innerHTML = `
+			<div class="choose-person-content">
+				<div class="choose-person-icon">🎧</div>
+				<h3>Your Schedule Is Empty</h3>
+				<p>Add a few shows first, then switch back to My Schedule.</p>
+				<button class="btn-primary" type="button">Back to All Shows</button>
+			</div>
+		`;
+
+		const button = wrapper.querySelector("button");
+		button.addEventListener("click", () => {
+			this.disableMyScheduleAndShowAll();
+		});
+
+		return wrapper;
+	}
+
+	showMyScheduleEmptyMessage() {
+		this.removeChoosePersonMessage();
+		const mainContainer = document.querySelector(".container");
+		const festivalGrid = document.querySelector(".festival-grid");
+		if (!mainContainer || !festivalGrid) return;
+
+		const messageElement = this.createMyScheduleEmptyState();
+		mainContainer.insertBefore(messageElement, festivalGrid);
+	}
+
+	disableMyScheduleAndShowAll() {
+		this.showMySchedule = false;
+		const myScheduleToggle = document.getElementById("myScheduleToggle");
+		if (myScheduleToggle) {
+			myScheduleToggle.classList.remove("active");
+			myScheduleToggle.textContent = "My Schedule";
+		}
+		this.applyFilters();
+	}
+
+	showNoResultsMessage(message) {
+		this.removeChoosePersonMessage();
+		const mainContainer = document.querySelector(".container");
+		const festivalGrid = document.querySelector(".festival-grid");
+		if (!mainContainer || !festivalGrid) return;
+
+		const messageElement = document.createElement("div");
+		messageElement.className = "choose-person-message";
+		messageElement.innerHTML = `
+			<div class="choose-person-content">
+				<div class="choose-person-icon">📭</div>
+				<h3>No Shows Found</h3>
+				<p>${this.escapeHtml(message)}</p>
+			</div>
+		`;
+
+		mainContainer.insertBefore(messageElement, festivalGrid);
 	}
 
 	// Filter shows to only show those where current user is attending
@@ -555,7 +656,7 @@ class FestivalPlanner {
 
 			commentsToggle.addEventListener("click", (e) => {
 				e.stopPropagation();
-				this.toggleComments(showId);
+				this.toggleComments(showId, showElement);
 			});
 
 			commentsSection.appendChild(commentsToggle);
@@ -613,14 +714,20 @@ class FestivalPlanner {
 	}
 
 	async addAttendee(showId, name) {
+		// Optimistic local update so tags appear instantly.
+		if (!this.attendees.has(showId)) {
+			this.attendees.set(showId, new Set());
+		}
+		this.attendees.get(showId).add(name);
+
 		if (this.dataService) {
-			await this.dataService.saveAttendee(showId, name, "normal");
-		} else {
-			// Fallback to localStorage
-			if (!this.attendees.has(showId)) {
-				this.attendees.set(showId, new Set());
+			try {
+				await this.dataService.saveAttendee(showId, name, "normal");
+			} catch (error) {
+				console.error("Failed to save attendee to data service:", error);
 			}
-			this.attendees.get(showId).add(name);
+		} else {
+			// localStorage fallback already updated above
 		}
 
 		// Initialize state as normal if not already set
@@ -635,16 +742,22 @@ class FestivalPlanner {
 	}
 
 	async removeAttendee(showId, name) {
-		if (this.dataService) {
-			await this.dataService.removeAttendee(showId, name);
-		} else {
-			// Fallback to localStorage
-			if (this.attendees.has(showId)) {
-				this.attendees.get(showId).delete(name);
-				if (this.attendees.get(showId).size === 0) {
-					this.attendees.delete(showId);
-				}
+		// Optimistic local update so tags are removed instantly.
+		if (this.attendees.has(showId)) {
+			this.attendees.get(showId).delete(name);
+			if (this.attendees.get(showId).size === 0) {
+				this.attendees.delete(showId);
 			}
+		}
+
+		if (this.dataService) {
+			try {
+				await this.dataService.removeAttendee(showId, name);
+			} catch (error) {
+				console.error("Failed to remove attendee from data service:", error);
+			}
+		} else {
+			// localStorage fallback already updated above
 		}
 
 		// Remove from attendee states
@@ -824,6 +937,9 @@ class FestivalPlanner {
 					}
 				});
 			}
+
+			// Ensure comments are also available in chronological cards
+			this.addCommentsToShow(show);
 		});
 	}
 
@@ -1203,8 +1319,13 @@ class FestivalPlanner {
 	}
 
 	// Render comments for a specific show
-	renderComments(showId) {
-		const showElement = document.querySelector(`[data-show="${showId}"]`);
+	renderComments(showId, targetShowElement = null) {
+		const showElement =
+			targetShowElement ||
+			Array.from(document.querySelectorAll(`[data-show="${showId}"]`)).find(
+				(el) => el.offsetParent !== null
+			) ||
+			document.querySelector(`[data-show="${showId}"]`);
 		if (!showElement) return;
 
 		let commentsContainer = showElement.querySelector(".comments-container");
@@ -1531,12 +1652,18 @@ class FestivalPlanner {
 	}
 
 	// Toggle comments visibility for a show
-	toggleComments(showId) {
-		const showElement = document.querySelector(`[data-show="${showId}"]`);
+	toggleComments(showId, targetShowElement = null) {
+		const showElement =
+			targetShowElement ||
+			Array.from(document.querySelectorAll(`[data-show="${showId}"]`)).find(
+				(el) => el.offsetParent !== null
+			) ||
+			document.querySelector(`[data-show="${showId}"]`);
 		if (!showElement) return;
 
 		let commentsContainer = showElement.querySelector(".comments-container");
 		const commentsToggle = showElement.querySelector(".comments-toggle-btn");
+		if (!commentsToggle) return;
 
 		if (
 			commentsContainer &&
@@ -1557,39 +1684,37 @@ class FestivalPlanner {
 			commentsContainer.style.display = "block";
 			commentsContainer.classList.add("show");
 			commentsToggle.classList.add("active");
-			this.renderComments(showId);
+			this.renderComments(showId, showElement);
 		}
 	}
 
 	// Update comments count for a show
 	updateCommentsCount(showId) {
-		const showElement = document.querySelector(`[data-show="${showId}"]`);
-		if (!showElement) return;
-
-		const commentsToggle = showElement.querySelector(".comments-toggle-btn");
-		if (!commentsToggle) return;
-
 		const commentCount = this.comments.has(showId)
 			? this.comments.get(showId).length
 			: 0;
 
-		// Find existing count badge or create new one
-		let commentsCount = commentsToggle.querySelector(".comments-count");
+		// Update all matching cards (stage + chronological view).
+		document.querySelectorAll(`[data-show="${showId}"]`).forEach((showElement) => {
+			const commentsToggle = showElement.querySelector(".comments-toggle-btn");
+			if (!commentsToggle) return;
 
-		if (commentCount > 0) {
-			// Show count badge
-			if (!commentsCount) {
-				commentsCount = document.createElement("span");
-				commentsCount.className = "comments-count";
-				commentsToggle.appendChild(commentsCount);
-			}
-			commentsCount.textContent = commentCount;
-		} else {
-			// Hide count badge if it exists
-			if (commentsCount) {
+			// Find existing count badge or create new one
+			let commentsCount = commentsToggle.querySelector(".comments-count");
+
+			if (commentCount > 0) {
+				// Show count badge
+				if (!commentsCount) {
+					commentsCount = document.createElement("span");
+					commentsCount.className = "comments-count";
+					commentsToggle.appendChild(commentsCount);
+				}
+				commentsCount.textContent = commentCount;
+			} else if (commentsCount) {
+				// Hide count badge if it exists
 				commentsCount.remove();
 			}
-		}
+		});
 	}
 
 	// Get color for a person
