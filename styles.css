@@ -257,6 +257,10 @@ body::after {
 	position: relative;
 }
 
+.chronological-show.comments-open {
+	z-index: 80;
+}
+
 .chronological-show:hover {
 	transform: translateY(-2px);
 	box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45), 0 0 18px rgba(98, 184, 255, 0.22);
@@ -295,6 +299,8 @@ body::after {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 4px;
+	position: relative;
+	z-index: 2;
 }
 
 /* Stage colors for chronological view */
@@ -1133,14 +1139,15 @@ body::after {
 	position: absolute;
 	top: 8px;
 	right: 8px;
-	z-index: 10;
+	z-index: 40;
+	pointer-events: auto;
 }
 
 .chronological-show .comments-container {
 	position: absolute;
 	top: calc(100% + 5px);
 	right: 0;
-	z-index: 20;
+	z-index: 60;
 	min-width: 300px;
 	background: #f8fafc;
 	border-radius: 8px;

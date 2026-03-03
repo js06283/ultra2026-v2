@@ -663,6 +663,11 @@ class FestivalPlanner {
 			showElement.appendChild(commentsSection);
 		}
 
+		// Prevent comment controls from triggering show click handlers underneath.
+		commentsSection.addEventListener("click", (e) => {
+			e.stopPropagation();
+		});
+
 		// Update the comments count to ensure it's current
 		this.updateCommentsCount(showId);
 	}
@@ -1335,6 +1340,10 @@ class FestivalPlanner {
 			showElement.appendChild(commentsContainer);
 		}
 
+		commentsContainer.addEventListener("click", (e) => {
+			e.stopPropagation();
+		});
+
 		commentsContainer.innerHTML = "";
 
 		// Add comment input
@@ -1674,6 +1683,7 @@ class FestivalPlanner {
 			commentsContainer.style.display = "none";
 			commentsContainer.classList.remove("show");
 			commentsToggle.classList.remove("active");
+			showElement.classList.remove("comments-open");
 		} else {
 			// Show comments
 			if (!commentsContainer) {
@@ -1684,6 +1694,7 @@ class FestivalPlanner {
 			commentsContainer.style.display = "block";
 			commentsContainer.classList.add("show");
 			commentsToggle.classList.add("active");
+			showElement.classList.add("comments-open");
 			this.renderComments(showId, showElement);
 		}
 	}
