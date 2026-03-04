@@ -1,4 +1,5 @@
 const express = require("express");
+const fs = require("fs");
 const path = require("path");
 const { Pool } = require("pg");
 
@@ -36,6 +37,134 @@ async function initDb() {
 			timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		);
 	`);
+}
+
+function parseCsvLine(line) {
+	const values = [];
+	let current = "";
+	let inQuotes = false;
+
+	for (let i = 0; i < line.length; i++) {
+		const char = line[i];
+		if (char === '"') {
+			inQuotes = !inQuotes;
+		} else if (char === "," && !inQuotes) {
+			values.push(current.trim());
+			current = "";
+		} else {
+			current += char;
+		}
+	}
+
+	values.push(current.trim());
+	return values;
+}
+
+function getDayNumber(day) {
+	const normalizedDay = String(day || "").toLowerCase();
+	if (normalizedDay.includes("friday")) return 1;
+	if (normalizedDay.includes("saturday")) return 2;
+	if (normalizedDay.includes("sunday")) return 3;
+	return 1;
+}
+
+function toSlug(value) {
+	return String(value || "")
+		.toLowerCase()
+		.replace(/[^a-z0-9\s-]/g, "")
+		.replace(/\s+/g, "-")
+		.replace(/-+/g, "-")
+		.replace(/^-|-$/g, "");
+}
+
+function toLegacyStageSlug(stage) {
+	return String(stage || "").toLowerCase().replace(/\s+/g, "-");
+}
+
+function toLegacyArtistSlug(artist) {
+	return String(artist || "")
+		.toLowerCase()
+		.replace(/[^a-z0-9\s-]/g, "")
+		.replace(/\s+/g, "-")
+		.replace(/-+/g, "-")
+		.replace(/^-|-$/g, "");
+}
+
+function normalizeExplicitId(sourceId) {
+	const normalized = String(sourceId || "")
+		.trim()
+		.toLowerCase()
+		.replace(/[^a-z0-9_-]/g, "-")
+		.replace(/-+/g, "-")
+		.replace(/^-|-$/g, "");
+	if (!normalized) return "";
+	return normalized.startsWith("show_") ? normalized : `show_${normalized}`;
+}
+
+function generateLegacyShowId(day, stage, artist, time) {
+	const dayNum = getDayNumber(day);
+	const stageSlug = toLegacyStageSlug(stage);
+	const artistSlug = toLegacyArtistSlug(artist);
+	const timeSlug = String(time || "").replace(/[^a-z0-9]/gi, "");
+	return `show_${dayNum}_${stageSlug}_${artistSlug}_${timeSlug}`;
+}
+
+function parseScheduleRows(csvText) {
+	const lines = String(csvText || "")
+		.split("\n")
+		.map((line) => line.trim())
+		.filter(Boolean);
+	if (!lines.length) return [];
+
+	const headers = parseCsvLine(lines[0]).map((header) =>
+		header.replace(/^\ufeff/, "").trim().toLowerCase()
+	);
+	const dayIndex = headers.indexOf("day");
+	const timeIndex = headers.indexOf("time");
+	const stageIndex = headers.indexOf("stage");
+	const artistIndex = headers.indexOf("artist");
+	const idIndex = headers.indexOf("id");
+
+	const rows = [];
+	for (let i = 1; i < lines.length; i++) {
+		const values = parseCsvLine(lines[i]);
+		const day = (values[dayIndex >= 0 ? dayIndex : 0] || "").trim();
+		const time = (values[timeIndex >= 0 ? timeIndex : 1] || "").trim();
+		const stage = (values[stageIndex >= 0 ? stageIndex : 2] || "").trim();
+		const artist = (values[artistIndex >= 0 ? artistIndex : 3] || "").trim();
+		const sourceId = (values[idIndex >= 0 ? idIndex : -1] || "").trim();
+		if (day && time && stage && artist) {
+			rows.push({ day, time, stage, artist, sourceId });
+		}
+	}
+	return rows;
+}
+
+function buildShowIdMappings(rows) {
+	const counters = new Map();
+	const byOldId = new Map();
+
+	for (const row of rows) {
+		const dayNum = getDayNumber(row.day);
+		const oldId = generateLegacyShowId(row.day, row.stage, row.artist, row.time);
+		const explicitId = normalizeExplicitId(row.sourceId);
+		let newId = explicitId;
+
+		if (!newId) {
+			const stageSlug = toSlug(row.stage);
+			const artistSlug = toSlug(row.artist);
+			const key = `${dayNum}|${stageSlug}|${artistSlug}`;
+			const occurrence = (counters.get(key) || 0) + 1;
+			counters.set(key, occurrence);
+			newId = `show_${dayNum}_${stageSlug}_${artistSlug}_${occurrence}`;
+		}
+
+		byOldId.set(oldId, newId);
+	}
+
+	return Array.from(byOldId.entries())
+		.filter(([oldId, newId]) => oldId !== newId)
+		.map(([oldId, newId]) => ({ oldId, newId }));
 }
 
 app.get("/api/health", async (_req, res) => {
@@ -201,6 +330,119 @@ app.post("/api/import", async (req, res) => {
 
 		await pool.query("COMMIT");
 		res.json({ ok: true });
+	} catch (error) {
+		await pool.query("ROLLBACK");
+		res.status(500).json({ ok: false, error: error.message });
+	}
+});
+
+app.post("/api/admin/migrate-show-ids", async (req, res) => {
+	const token = req.get("x-migration-token") || req.body?.token || req.query?.token;
+	if (process.env.MIGRATION_TOKEN && token !== process.env.MIGRATION_TOKEN) {
+		return res.status(403).json({ ok: false, error: "Invalid migration token" });
+	}
+
+	const dryRun = Boolean(req.body?.dryRun);
+	const scheduleCsvPath = req.body?.scheduleCsvPath
+		? path.resolve(__dirname, req.body.scheduleCsvPath)
+		: path.join(__dirname, "ultra_2026_inferred_schedule.csv");
+	const csvText =
+		typeof req.body?.csvText === "string" && req.body.csvText.trim()
+			? req.body.csvText
+			: fs.readFileSync(scheduleCsvPath, "utf8");
+
+	const rows = parseScheduleRows(csvText);
+	const mappings = buildShowIdMappings(rows);
+	if (!mappings.length) {
+		return res.json({
+			ok: true,
+			dryRun,
+			message: "No show ID remap needed.",
+			parsedRows: rows.length,
+			mappedRows: 0,
+		});
+	}
+
+	const oldIds = mappings.map((m) => m.oldId);
+	const newIds = mappings.map((m) => m.newId);
+
+	const [attendeeMatches, commentMatches] = await Promise.all([
+		pool.query(
+			"SELECT COUNT(*)::int AS count FROM attendees WHERE show_id = ANY($1::text[])",
+			[oldIds]
+		),
+		pool.query(
+			"SELECT COUNT(*)::int AS count FROM comments WHERE show_id = ANY($1::text[])",
+			[oldIds]
+		),
+	]);
+
+	if (dryRun) {
+		return res.json({
+			ok: true,
+			dryRun: true,
+			parsedRows: rows.length,
+			mappedRows: mappings.length,
+			matchedAttendees: attendeeMatches.rows[0].count,
+			matchedComments: commentMatches.rows[0].count,
+			sample: mappings.slice(0, 20),
+		});
+	}
+
+	await pool.query("BEGIN");
+	try {
+		await pool.query(`
+			CREATE TEMP TABLE id_migration_map (
+				old_id TEXT PRIMARY KEY,
+				new_id TEXT NOT NULL
+			) ON COMMIT DROP
+		`);
+		await pool.query(
+			`INSERT INTO id_migration_map (old_id, new_id)
+			 SELECT * FROM UNNEST($1::text[], $2::text[])`,
+			[oldIds, newIds]
+		);
+
+		await pool.query(`
+			CREATE TEMP TABLE attendees_snapshot ON COMMIT DROP AS
+			SELECT
+				COALESCE(m.new_id, a.show_id) AS show_id,
+				a.attendee_name,
+				a.state,
+				a.timestamp
+			FROM attendees a
+			LEFT JOIN id_migration_map m ON m.old_id = a.show_id
+		`);
+
+		await pool.query("DELETE FROM attendees");
+		await pool.query(`
+			INSERT INTO attendees (show_id, attendee_name, state, timestamp)
+			SELECT DISTINCT ON (show_id, attendee_name)
+				show_id,
+				attendee_name,
+				state,
+				timestamp
+			FROM attendees_snapshot
+			ORDER BY show_id, attendee_name, timestamp DESC
+		`);
+
+		await pool.query(`
+			UPDATE comments c
+			SET show_id = m.new_id
+			FROM id_migration_map m
+			WHERE c.show_id = m.old_id
+		`);
+
+		await pool.query("COMMIT");
+
+		res.json({
+			ok: true,
+			dryRun: false,
+			parsedRows: rows.length,
+			mappedRows: mappings.length,
+			matchedAttendees: attendeeMatches.rows[0].count,
+			matchedComments: commentMatches.rows[0].count,
+		});
 	} catch (error) {
 		await pool.query("ROLLBACK");
 		res.status(500).json({ ok: false, error: error.message });

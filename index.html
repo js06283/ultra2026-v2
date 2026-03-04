@@ -19,6 +19,9 @@
 		<div class="container">
 			<header class="header">
 				<h1>ULTRA</h1>
+				<p class="interaction-hint">
+					1 click = interested, 2 clicks = must see, 3 clicks = delete
+				</p>
 				<div class="name-input-section">
 					<select id="nameSelect" class="name-select">
 						<option value="">Select a name...</option>
@@ -48,13 +51,19 @@
 						<button class="day-toggle" data-day="saturday">Saturday</button>
 						<button class="day-toggle" data-day="sunday">Sunday</button>
 					</div>
+					<div class="schedule-mode-control">
+						<label for="scheduleModeSelect">Schedule</label>
+						<select id="scheduleModeSelect" class="schedule-mode-select">
+							<option value="all">All Shows</option>
+							<option value="my">My Schedule</option>
+							<option value="group">Group Schedule</option>
+						</select>
+					</div>
 					<div class="view-toggles">
-						<button id="myScheduleToggle" class="btn-secondary">
-							My Schedule
-						</button>
 						<button id="chronologicalToggle" class="btn-secondary">
 							Chronological
 						</button>
+						<button id="timelineToggle" class="btn-secondary">Timeline</button>
 					</div>
 				</div>
 			</header>

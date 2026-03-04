@@ -6,6 +6,7 @@ class FestivalScheduleParser {
 		this.days = new Set();
 		this.stageOrder = []; // Track stage order as they appear in CSV
 		this.showOrder = new Map(); // Track show order for each stage
+		this.showInstanceCounter = new Map(); // Track duplicate artist slots per day+stage
 	}
 
 	// Parse CSV data
@@ -21,6 +22,9 @@ class FestivalScheduleParser {
 		const stageIndex = headers.indexOf("stage");
 		const artistIndex = headers.indexOf("artist");
 		const genreIndex = headers.indexOf("genre");
+		const idIndex = headers.indexOf("id");
+
+		this.showInstanceCounter.clear();
 
 		// Skip header row
 		for (let i = 1; i < lines.length; i++) {
@@ -40,9 +44,12 @@ class FestivalScheduleParser {
 					values[genreIndex >= 0 ? genreIndex : values.length > 4 ? 4 : -1] ||
 					""
 				).trim();
+				const sourceId = (
+					values[idIndex >= 0 ? idIndex : -1] || ""
+				).trim();
 
 				if (day && time && stage && artist) {
-					this.addShow(day, time, stage, artist, genre);
+					this.addShow(day, time, stage, artist, genre, sourceId);
 				}
 			}
 		}
@@ -74,7 +81,7 @@ class FestivalScheduleParser {
 	}
 
 	// Add a show to the schedule
-	addShow(day, time, stage, artist, genre = "") {
+	addShow(day, time, stage, artist, genre = "", sourceId = "") {
 		const normalizedTime = this.normalizeTime(time);
 
 		this.days.add(day);
@@ -97,7 +104,7 @@ class FestivalScheduleParser {
 			time: normalizedTime,
 			artist: artist,
 			genre: genre,
-			id: this.generateShowId(day, stage, artist, time),
+			id: this.generateShowId(day, stage, artist, sourceId),
 		};
 
 		this.schedule.get(day).get(stage).push(show);
@@ -111,19 +118,38 @@ class FestivalScheduleParser {
 	}
 
 	// Generate a unique show ID
-	generateShowId(day, stage, artist, time) {
+	generateShowId(day, stage, artist, sourceId = "") {
+		const explicitId = this.normalizeExplicitId(sourceId);
+		if (explicitId) return explicitId;
+
 		const dayNum = this.getDayNumber(day);
-		const stageSlug = stage.toLowerCase().replace(/\s+/g, "-");
-		const artistSlug = artist
+		const stageSlug = this.toSlug(stage);
+		const artistSlug = this.toSlug(artist);
+		const key = `${dayNum}|${stageSlug}|${artistSlug}`;
+		const occurrence = (this.showInstanceCounter.get(key) || 0) + 1;
+		this.showInstanceCounter.set(key, occurrence);
+
+		return `show_${dayNum}_${stageSlug}_${artistSlug}_${occurrence}`;
+	}
+
+	toSlug(value) {
+		return String(value || "")
 			.toLowerCase()
-			.replace(/[^a-z0-9\s-]/g, "") // Remove special characters except spaces and hyphens
-			.replace(/\s+/g, "-") // Replace spaces with hyphens
-			.replace(/-+/g, "-") // Replace multiple hyphens with single hyphen
-			.replace(/^-|-$/g, ""); // Remove leading/trailing hyphens
+			.replace(/[^a-z0-9\s-]/g, "")
+			.replace(/\s+/g, "-")
+			.replace(/-+/g, "-")
+			.replace(/^-|-$/g, "");
+	}
 
-		const timeSlug = time.replace(/[^a-z0-9]/gi, "");
-
-		return `show_${dayNum}_${stageSlug}_${artistSlug}_${timeSlug}`;
+	normalizeExplicitId(sourceId) {
+		const normalized = String(sourceId || "")
+			.trim()
+			.toLowerCase()
+			.replace(/[^a-z0-9_-]/g, "-")
+			.replace(/-+/g, "-")
+			.replace(/^-|-$/g, "");
+		if (!normalized) return "";
+		return normalized.startsWith("show_") ? normalized : `show_${normalized}`;
 	}
 
 	// Normalize time strings for parsing/sorting

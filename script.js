@@ -5,8 +5,8 @@ class FestivalPlanner {
 		this.comments = new Map(); // Map of showId to Array of comment objects
 		this.currentName = null;
 		this.currentDay = "all";
-		this.showMySchedule = false;
-		this.showChronological = false;
+		this.scheduleMode = "all"; // all | my | group
+		this.viewMode = "stage"; // stage | chronological | timeline
 		this.scheduleLoaded = false;
 		this.dataService = null;
 		this.unsubscribe = null;
@@ -17,7 +17,7 @@ class FestivalPlanner {
 			Theo: "#4ECDC4", // Turquoise
 			Andy: "#45B7D1", // Sky Blue
 			Noel: "#96CEB4", // Mint Green
-			Kevin: "#FFEAA7", // Light Yellow
+			Kevin: "#9C6A00", // Dark amber for better contrast
 			Ellen: "#DDA0DD", // Plum
 			PJ: "#98D8C8", // Seafoam Green
 			Other: "#F7DC6F", // Golden Yellow for custom names
@@ -192,11 +192,11 @@ class FestivalPlanner {
 			});
 		});
 
-		// Handle My Schedule toggle
-		const myScheduleToggle = document.getElementById("myScheduleToggle");
-		if (myScheduleToggle) {
-			myScheduleToggle.addEventListener("click", () => {
-				this.toggleMySchedule();
+		// Handle schedule mode dropdown
+		const scheduleModeSelect = document.getElementById("scheduleModeSelect");
+		if (scheduleModeSelect) {
+			scheduleModeSelect.addEventListener("change", (e) => {
+				this.setScheduleMode(e.target.value);
 			});
 		}
 
@@ -205,6 +205,14 @@ class FestivalPlanner {
 		if (chronologicalToggle) {
 			chronologicalToggle.addEventListener("click", () => {
 				this.toggleChronological();
+			});
+		}
+
+		// Handle Timeline toggle
+		const timelineToggle = document.getElementById("timelineToggle");
+		if (timelineToggle) {
+			timelineToggle.addEventListener("click", () => {
+				this.toggleTimeline();
 			});
 		}
 
@@ -218,6 +226,7 @@ class FestivalPlanner {
 
 		// Focus on name select when page loads
 		nameSelect.focus();
+		this.updateScheduleModeButton();
 	}
 
 	handleNameSubmit() {
@@ -285,40 +294,61 @@ class FestivalPlanner {
 		this.applyFilters();
 	}
 
-	// Toggle My Schedule view
-	toggleMySchedule() {
-		this.showMySchedule = !this.showMySchedule;
-		const myScheduleToggle = document.getElementById("myScheduleToggle");
-
-		if (this.showMySchedule) {
-			myScheduleToggle.classList.add("active");
-			myScheduleToggle.textContent = "All Shows";
-		} else {
-			myScheduleToggle.classList.remove("active");
-			myScheduleToggle.textContent = "My Schedule";
-			// Remove the choose person message when switching away from My Schedule
-			this.removeChoosePersonMessage();
-		}
-
-		// Apply filters
+	setScheduleMode(mode) {
+		const validModes = new Set(["all", "my", "group"]);
+		this.scheduleMode = validModes.has(mode) ? mode : "all";
+		this.updateScheduleModeButton();
+		this.removeChoosePersonMessage();
 		this.applyFilters();
+	}
+
+	updateScheduleModeButton() {
+		const scheduleModeSelect = document.getElementById("scheduleModeSelect");
+		if (!scheduleModeSelect) return;
+		scheduleModeSelect.value = this.scheduleMode;
+	}
+
+	requiresSelectedPerson() {
+		return this.scheduleMode === "my";
+	}
+
+	isGroupInterested(showId) {
+		if (!this.attendees.has(showId)) return false;
+		for (const attendee of this.attendees.get(showId)) {
+			const state = this.getAttendeeState(showId, attendee);
+			if (state !== "deleted") return true;
+		}
+		return false;
 	}
 
 	// Toggle Chronological view
 	toggleChronological() {
-		this.showChronological = !this.showChronological;
-		const chronologicalToggle = document.getElementById("chronologicalToggle");
-
-		if (this.showChronological) {
-			chronologicalToggle.classList.add("active");
-			chronologicalToggle.textContent = "Stage View";
-		} else {
-			chronologicalToggle.classList.remove("active");
-			chronologicalToggle.textContent = "Chronological";
-		}
-
-		// Apply filters
+		this.viewMode =
+			this.viewMode === "chronological" ? "stage" : "chronological";
+		this.updateViewModeButtons();
 		this.applyFilters();
+	}
+
+	// Toggle Timeline view
+	toggleTimeline() {
+		this.viewMode = this.viewMode === "timeline" ? "stage" : "timeline";
+		this.updateViewModeButtons();
+		this.applyFilters();
+	}
+
+	updateViewModeButtons() {
+		const chronologicalToggle = document.getElementById("chronologicalToggle");
+		const timelineToggle = document.getElementById("timelineToggle");
+
+		if (chronologicalToggle) {
+			chronologicalToggle.classList.toggle(
+				"active",
+				this.viewMode === "chronological"
+			);
+		}
+		if (timelineToggle) {
+			timelineToggle.classList.toggle("active", this.viewMode === "timeline");
+		}
 	}
 
 	// Apply current filters (day, My Schedule, and Chronological)
@@ -328,8 +358,10 @@ class FestivalPlanner {
 			this.removeChoosePersonMessage();
 		}
 
-		if (this.showChronological) {
+		if (this.viewMode === "chronological") {
 			this.showChronologicalView();
+		} else if (this.viewMode === "timeline") {
+			this.showTimelineView();
 		} else {
 			this.showStageView();
 		}
@@ -351,12 +383,16 @@ class FestivalPlanner {
 		if (existingChronologicalView) {
 			existingChronologicalView.remove();
 		}
+		const existingTimelineView = festivalGrid.querySelector(".timeline-view");
+		if (existingTimelineView) {
+			existingTimelineView.remove();
+		}
 
 		// Remove any existing choose person message
 		this.removeChoosePersonMessage();
 
-		// Check if My Schedule is enabled but no name is selected
-		if (this.showMySchedule && !this.currentName) {
+		// My Schedule requires selected person
+		if (this.requiresSelectedPerson() && !this.currentName) {
 			this.showChoosePersonMessage();
 			return;
 		}
@@ -379,10 +415,12 @@ class FestivalPlanner {
 			});
 		}
 
-		// Then, filter by My Schedule if enabled
-		if (this.showMySchedule && this.currentName) {
+		// Then, filter by schedule mode
+		if (this.scheduleMode === "my" && this.currentName) {
+			filteredShows = filteredShows.filter((show) => this.isUserAttending(show.id));
+		} else if (this.scheduleMode === "group") {
 			filteredShows = filteredShows.filter((show) =>
-				this.isUserAttending(show.id)
+				this.isGroupInterested(show.id)
 			);
 		}
 
@@ -392,19 +430,15 @@ class FestivalPlanner {
 			chronologicalView.appendChild(showElement);
 		});
 
-		if (
-			this.showMySchedule &&
-			this.currentName &&
-			filteredShows.length === 0
-		) {
-			const emptyState = this.createMyScheduleEmptyState();
+		if (this.scheduleMode !== "all" && filteredShows.length === 0) {
+			const emptyState = this.createScheduleEmptyState(this.scheduleMode);
 			chronologicalView.appendChild(emptyState);
 		}
 
 		// Prevent empty blank screen when filters return no shows
 		if (
 			filteredShows.length === 0 &&
-			!(this.showMySchedule && this.currentName)
+			this.scheduleMode === "all"
 		) {
 			const emptyState = document.createElement("div");
 			emptyState.className = "choose-person-message";
@@ -412,7 +446,7 @@ class FestivalPlanner {
 				<div class="choose-person-content">
 					<div class="choose-person-icon">📭</div>
 					<h3>No Shows Found</h3>
-					<p>Try changing day filters or turning off My Schedule.</p>
+					<p>Try changing day filters.</p>
 				</div>
 			`;
 			chronologicalView.appendChild(emptyState);
@@ -434,12 +468,16 @@ class FestivalPlanner {
 		if (chronologicalView) {
 			chronologicalView.remove();
 		}
+		const timelineView = festivalGrid.querySelector(".timeline-view");
+		if (timelineView) {
+			timelineView.remove();
+		}
 
 		// Remove any existing choose person message
 		this.removeChoosePersonMessage();
 
-		// Check if My Schedule is enabled but no name is selected
-		if (this.showMySchedule && !this.currentName) {
+		// My Schedule requires selected person
+		if (this.requiresSelectedPerson() && !this.currentName) {
 			this.showChoosePersonMessage();
 			return;
 		}
@@ -447,95 +485,349 @@ class FestivalPlanner {
 		// Show day sections based on current filters
 		const daySections = document.querySelectorAll(".day-section");
 
-		// If My Schedule is enabled, we need to show only the selected day that has shows the user is attending
-		if (this.showMySchedule && this.currentName) {
-			// First, get all shows the current user is attending
-			const userShows = new Set();
-			this.attendees.forEach((attendeeSet, showId) => {
-				if (attendeeSet.has(this.currentName)) {
-					const state = this.getAttendeeState(showId, this.currentName);
-					if (state !== "deleted") {
-						userShows.add(showId);
-					}
-				}
-			});
+		daySections.forEach((section) => {
+			const dayTitle = section
+				.querySelector(".day-title")
+				.textContent.toLowerCase();
+			const shouldShowDay =
+				this.currentDay === "all" || dayTitle.includes(this.currentDay);
 
-			if (userShows.size === 0) {
-				daySections.forEach((section) => {
-					section.style.display = "none";
-				});
-				this.showMyScheduleEmptyMessage();
+			if (!shouldShowDay) {
+				section.style.display = "none";
 				return;
 			}
 
-			// Show/hide day sections based on current day selection and whether they contain user's shows
-			daySections.forEach((section) => {
-				const dayTitle = section
-					.querySelector(".day-title")
-					.textContent.toLowerCase();
-				const shouldShowDay =
-					this.currentDay === "all" || dayTitle.includes(this.currentDay);
+			section.style.display = "block";
+			if (this.scheduleMode === "my" && this.currentName) {
+				this.filterShowsForMySchedule(section);
+			} else if (this.scheduleMode === "group") {
+				this.filterShowsForGroupSchedule(section);
+			} else {
+				this.showAllShows(section);
+			}
 
-				if (shouldShowDay) {
-					const shows = section.querySelectorAll(".show");
-					let hasUserShows = false;
-
-					// Check if this section has any shows the user is attending
-					shows.forEach((show) => {
-						const showId = show.dataset.show;
-						if (userShows.has(showId)) {
-							hasUserShows = true;
-						}
-					});
-
-					if (hasUserShows) {
-						section.style.display = "block";
-						// Only show the shows the user is attending
-						this.filterShowsForMySchedule(section);
-						// No sorting - preserve original order
-					} else {
-						section.style.display = "none";
-					}
-				} else {
-					section.style.display = "none";
-				}
-			});
-		} else {
-			// Normal day filtering
-			daySections.forEach((section) => {
-				const dayTitle = section
-					.querySelector(".day-title")
-					.textContent.toLowerCase();
-				const shouldShowDay =
-					this.currentDay === "all" || dayTitle.includes(this.currentDay);
-
-				if (shouldShowDay) {
-					section.style.display = "block";
-					this.showAllShows(section);
-					// No sorting - preserve original order
-				} else {
-					section.style.display = "none";
-				}
-			});
-		}
+			const visibleShows = Array.from(section.querySelectorAll(".show")).some(
+				(show) => show.style.display !== "none"
+			);
+			if (!visibleShows) {
+				section.style.display = "none";
+			}
+		});
 
 		// Prevent empty blank screen when no stage sections are visible.
 		const hasVisibleDay = Array.from(daySections).some(
 			(section) => section.style.display !== "none"
 		);
 		if (!hasVisibleDay) {
-			this.showNoResultsMessage("No shows found for the current filters.");
+			if (this.scheduleMode === "my") {
+				this.showScheduleEmptyMessage("my");
+			} else if (this.scheduleMode === "group") {
+				this.showScheduleEmptyMessage("group");
+			} else {
+				this.showNoResultsMessage("No shows found for the current filters.");
+			}
 		}
 	}
 
-	createMyScheduleEmptyState() {
+	showTimelineView() {
+		const festivalGrid = document.querySelector(".festival-grid");
+		document.querySelectorAll(".day-section").forEach((section) => {
+			section.style.display = "none";
+		});
+
+		const existingChronologicalView = festivalGrid.querySelector(
+			".chronological-view"
+		);
+		if (existingChronologicalView) existingChronologicalView.remove();
+		const existingTimelineView = festivalGrid.querySelector(".timeline-view");
+		if (existingTimelineView) existingTimelineView.remove();
+
+		this.removeChoosePersonMessage();
+
+		if (this.requiresSelectedPerson() && !this.currentName) {
+			this.showChoosePersonMessage();
+			return;
+		}
+
+		const timelineView = document.createElement("div");
+		timelineView.className = "timeline-view";
+
+		const daySections = Array.from(document.querySelectorAll(".day-section")).filter(
+			(section) => {
+				const dayTitle = section
+					.querySelector(".day-title")
+					.textContent.toLowerCase();
+				return this.currentDay === "all" || dayTitle.includes(this.currentDay);
+			}
+		);
+
+		let totalShowsRendered = 0;
+		daySections.forEach((section) => {
+			const dayData = this.buildTimelineDayData(section);
+			if (!dayData || dayData.shows.length === 0) return;
+
+			let shows = dayData.shows;
+			if (this.scheduleMode === "my" && this.currentName) {
+				shows = shows.filter((show) => this.isUserAttending(show.id));
+			} else if (this.scheduleMode === "group") {
+				shows = shows.filter((show) => this.isGroupInterested(show.id));
+			}
+			if (shows.length === 0) return;
+
+			totalShowsRendered += shows.length;
+			const board = this.createTimelineBoard(dayData.dayTitle, dayData.stages, shows);
+			timelineView.appendChild(board);
+		});
+
+		if (totalShowsRendered === 0) {
+			if (this.scheduleMode !== "all") {
+				timelineView.appendChild(this.createScheduleEmptyState(this.scheduleMode));
+			} else {
+				this.showNoResultsMessage("No shows found for the current filters.");
+				return;
+			}
+		}
+
+		festivalGrid.appendChild(timelineView);
+		this.renderAttendees();
+	}
+
+	buildTimelineDayData(daySection) {
+		const dayTitle = daySection.querySelector(".day-title")?.textContent?.trim();
+		if (!dayTitle) return null;
+
+		const stageElements = Array.from(daySection.querySelectorAll(".stage"));
+		const stages = stageElements.map((stageEl) => ({
+			key: stageEl.dataset.stage,
+			name: stageEl.querySelector(".stage-title")?.textContent?.trim() || "Stage",
+			color: stageEl.style.getPropertyValue("--stage-color").trim(),
+		}));
+
+		const shows = [];
+		stageElements.forEach((stageEl) => {
+			const stageKey = stageEl.dataset.stage;
+			const stageName = stageEl.querySelector(".stage-title")?.textContent?.trim();
+			const stageColor = stageEl.style.getPropertyValue("--stage-color").trim();
+
+			stageEl.querySelectorAll(".show").forEach((showEl) => {
+				const range = this.parseTimeRange(showEl.querySelector(".show-time")?.textContent || "");
+				if (!range) return;
+				shows.push({
+					id: showEl.dataset.show,
+					title: showEl.querySelector(".show-title")?.textContent || "",
+					timeText: showEl.querySelector(".show-time")?.textContent || "",
+					stageKey: stageKey,
+					stageName: stageName,
+					stageColor: stageColor,
+					start: range.start,
+					end: range.end,
+				});
+			});
+		});
+
+		return { dayTitle, stages, shows };
+	}
+
+	parseTimeRange(timeText) {
+		const parts = (timeText || "").split("-").map((p) => p.trim());
+		const start = this.parseClockToMinutes(parts[0]);
+		if (start == null) return null;
+
+		let end = null;
+		if (parts.length > 1) end = this.parseClockToMinutes(parts[1]);
+		if (end == null) end = start + 60;
+		if (end <= start) end += 24 * 60;
+
+		return { start, end };
+	}
+
+	parseClockToMinutes(text) {
+		const match = (text || "")
+			.toUpperCase()
+			.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/);
+		if (!match) return null;
+		let hours = parseInt(match[1], 10);
+		const minutes = parseInt(match[2], 10);
+		const period = match[3];
+		if (period === "PM" && hours !== 12) hours += 12;
+		if (period === "AM" && hours === 12) hours = 0;
+		return hours * 60 + minutes;
+	}
+
+	formatTimelineHour(totalMinutes) {
+		const minutesInDay = ((totalMinutes % (24 * 60)) + 24 * 60) % (24 * 60);
+		let hours = Math.floor(minutesInDay / 60);
+		const period = hours >= 12 ? "PM" : "AM";
+		hours = hours % 12;
+		if (hours === 0) hours = 12;
+		return `${hours}${period}`;
+	}
+
+	createTimelineBoard(dayTitle, stages, shows) {
+		const minStart = Math.floor(Math.min(...shows.map((s) => s.start)) / 60) * 60;
+		const maxEnd = Math.ceil(Math.max(...shows.map((s) => s.end)) / 60) * 60;
+		const pxPerMinute = 1.05;
+		const totalMinutes = maxEnd - minStart;
+		const gridHeight = Math.max(480, Math.round(totalMinutes * pxPerMinute));
+		const hourCount = Math.max(1, Math.round(totalMinutes / 60));
+
+		const dayBoard = document.createElement("section");
+		dayBoard.className = "timeline-day-board";
+		dayBoard.innerHTML = `<h3 class="timeline-day-title">${this.escapeHtml(dayTitle)}</h3>`;
+
+		const board = document.createElement("div");
+		board.className = "timeline-board";
+		board.style.setProperty("--timeline-height", `${gridHeight}px`);
+		board.style.setProperty("--timeline-hours", `${hourCount}`);
+		board.style.setProperty("--timeline-hour-px", `${Math.round(60 * pxPerMinute)}px`);
+		board.style.gridTemplateColumns = `78px repeat(${stages.length}, minmax(150px, 1fr))`;
+
+		const emptyHeader = document.createElement("div");
+		emptyHeader.className = "timeline-header timeline-header-empty";
+		board.appendChild(emptyHeader);
+
+		stages.forEach((stage) => {
+			const h = document.createElement("div");
+			h.className = "timeline-header";
+			h.textContent = stage.name;
+			h.style.borderTop = `3px solid ${stage.color || "#62b8ff"}`;
+			board.appendChild(h);
+		});
+
+		const yAxis = document.createElement("div");
+		yAxis.className = "timeline-y-axis";
+		yAxis.style.height = `${gridHeight}px`;
+		for (let t = minStart; t <= maxEnd; t += 60) {
+			const tick = document.createElement("div");
+			tick.className = "timeline-y-tick";
+			tick.style.top = `${Math.round((t - minStart) * pxPerMinute)}px`;
+			tick.textContent = this.formatTimelineHour(t);
+			yAxis.appendChild(tick);
+		}
+		board.appendChild(yAxis);
+
+		stages.forEach((stage) => {
+			const col = document.createElement("div");
+			col.className = "timeline-stage-column";
+			col.style.height = `${gridHeight}px`;
+			col.style.setProperty("--stage-color", stage.color || "#62b8ff");
+
+			shows
+				.filter((s) => s.stageKey === stage.key)
+				.forEach((show) => {
+					const block = document.createElement("button");
+					block.type = "button";
+					block.className = "timeline-show";
+					block.dataset.show = show.id;
+					block.style.top = `${Math.round((show.start - minStart) * pxPerMinute)}px`;
+					block.style.height = `${Math.max(
+						30,
+						Math.round((show.end - show.start) * pxPerMinute)
+					)}px`;
+					block.innerHTML = `
+						<div class="timeline-show-title">${this.escapeHtml(show.title)}</div>
+						<div class="timeline-show-time">${this.escapeHtml(show.timeText)}</div>
+						<div class="timeline-show-tags"></div>
+					`;
+
+					block.addEventListener("click", async (e) => {
+						e.stopPropagation();
+						if (!this.currentName) return;
+						await this.toggleAttendeeById(show.id);
+						this.updateTimelineSelections();
+					});
+
+					col.appendChild(block);
+				});
+
+			board.appendChild(col);
+		});
+
+		dayBoard.appendChild(board);
+		return dayBoard;
+	}
+
+	async toggleAttendeeById(showId) {
+		const state = this.getAttendeeState(showId, this.currentName);
+		const isAttending =
+			this.attendees.has(showId) &&
+			this.attendees.get(showId).has(this.currentName) &&
+			state !== "deleted";
+
+		if (isAttending) {
+			const newState = this.toggleAttendeeState(showId, this.currentName);
+			if (newState === "deleted") {
+				await this.saveData();
+			}
+		} else {
+			if (state === "deleted") {
+				this.toggleAttendeeState(showId, this.currentName);
+				await this.saveData();
+			} else {
+				await this.addAttendee(showId, this.currentName);
+			}
+		}
+		this.renderAttendees();
+	}
+
+	updateTimelineSelections() {
+		document.querySelectorAll(".timeline-show").forEach((block) => {
+			const showId = block.dataset.show;
+			const attending = this.currentName ? this.isUserAttending(showId) : false;
+			block.classList.toggle("attending", attending);
+
+			const tagsEl = block.querySelector(".timeline-show-tags");
+			if (!tagsEl) return;
+			tagsEl.innerHTML = "";
+
+			const names = this.getInterestedNames(showId);
+			const maxTags = 5;
+			names.slice(0, maxTags).forEach((name) => {
+				const tag = document.createElement("span");
+				tag.className = "timeline-person-tag";
+				tag.textContent = this.getInitials(name);
+				tag.title = name;
+				tag.style.background = this.getPersonColor(name);
+				tagsEl.appendChild(tag);
+			});
+
+			if (names.length > maxTags) {
+				const overflow = document.createElement("span");
+				overflow.className = "timeline-person-tag timeline-person-overflow";
+				overflow.textContent = `+${names.length - maxTags}`;
+				overflow.title = `${names.length - maxTags} more`;
+				tagsEl.appendChild(overflow);
+			}
+		});
+	}
+
+	getInterestedNames(showId) {
+		if (!this.attendees.has(showId)) return [];
+		return Array.from(this.attendees.get(showId)).filter((name) => {
+			const state = this.getAttendeeState(showId, name);
+			return state !== "deleted";
+		});
+	}
+
+	getInitials(name) {
+		const clean = (name || "").trim();
+		if (!clean) return "?";
+		return clean[0].toUpperCase();
+	}
+
+	createScheduleEmptyState(mode = "my") {
+		const isGroup = mode === "group";
+		const title = isGroup ? "Group Schedule Is Empty" : "Your Schedule Is Empty";
+		const desc = isGroup
+			? "No one in the group has marked any shows yet."
+			: "Add a few shows first, then switch back to My Schedule.";
 		const wrapper = document.createElement("div");
 		wrapper.className = "choose-person-message";
 		wrapper.innerHTML = `
 			<div class="choose-person-content">
 				<div class="choose-person-icon">🎧</div>
-				<h3>Your Schedule Is Empty</h3>
-				<p>Add a few shows first, then switch back to My Schedule.</p>
+				<h3>${title}</h3>
+				<p>${desc}</p>
 				<button class="btn-primary" type="button">Back to All Shows</button>
 			</div>
 		`;
@@ -548,24 +840,18 @@ class FestivalPlanner {
 		return wrapper;
 	}
 
-	showMyScheduleEmptyMessage() {
+	showScheduleEmptyMessage(mode = "my") {
 		this.removeChoosePersonMessage();
 		const mainContainer = document.querySelector(".container");
 		const festivalGrid = document.querySelector(".festival-grid");
 		if (!mainContainer || !festivalGrid) return;
 
-		const messageElement = this.createMyScheduleEmptyState();
+		const messageElement = this.createScheduleEmptyState(mode);
 		mainContainer.insertBefore(messageElement, festivalGrid);
 	}
 
 	disableMyScheduleAndShowAll() {
-		this.showMySchedule = false;
-		const myScheduleToggle = document.getElementById("myScheduleToggle");
-		if (myScheduleToggle) {
-			myScheduleToggle.classList.remove("active");
-			myScheduleToggle.textContent = "My Schedule";
-		}
-		this.applyFilters();
+		this.setScheduleMode("all");
 	}
 
 	showNoResultsMessage(message) {
@@ -610,6 +896,17 @@ class FestivalPlanner {
 			} else {
 				show.style.display = "none";
 			}
+		});
+	}
+
+	// Filter shows to only those where anyone has expressed interest
+	filterShowsForGroupSchedule(section) {
+		const shows = section.querySelectorAll(".show");
+		shows.forEach((show) => {
+			const showId = show.dataset.show;
+			const hasAnyInterest = this.isGroupInterested(showId);
+			show.style.display = hasAnyInterest ? "block" : "none";
+			show.style.opacity = hasAnyInterest ? "1" : "0";
 		});
 	}
 
@@ -946,6 +1243,8 @@ class FestivalPlanner {
 			// Ensure comments are also available in chronological cards
 			this.addCommentsToShow(show);
 		});
+
+		this.updateTimelineSelections();
 	}
 
 	async saveData() {
@@ -1469,10 +1768,8 @@ class FestivalPlanner {
 					stageElement?.style.getPropertyValue("--stage-color").trim() || "";
 
 				// Parse time for sorting and handle late-night shows
-				const { timeInMinutes, adjustedDay } = this.parseTimeForSorting(
-					showTime,
-					dayTitle
-				);
+				const { timeInMinutes } = this.parseTimeForSorting(showTime, dayTitle);
+				const dayOrderKey = this.getDaySortKey(dayTitle);
 
 				shows.push({
 					id: showId,
@@ -1483,7 +1780,8 @@ class FestivalPlanner {
 					stage: stageKey,
 					stageName: stageName,
 					stageColor: stageColor,
-					day: adjustedDay, // Use adjusted day for sorting
+					day: dayTitle,
+					dayOrderKey: dayOrderKey,
 					originalDay: dayTitle, // Keep original day for display
 					element: show,
 				});
@@ -1492,18 +1790,21 @@ class FestivalPlanner {
 
 		// Sort by day first, then by time
 		return shows.sort((a, b) => {
-			// First sort by day
-			const dayOrder = { Friday: 1, Saturday: 2, Sunday: 3 };
-			const dayA = dayOrder[a.day] || 0;
-			const dayB = dayOrder[b.day] || 0;
-
-			if (dayA !== dayB) {
-				return dayA - dayB;
+			if (a.dayOrderKey !== b.dayOrderKey) {
+				return a.dayOrderKey - b.dayOrderKey;
 			}
 
 			// Then sort by time
 			return a.timeInMinutes - b.timeInMinutes;
 		});
+	}
+
+	getDaySortKey(dayLabel) {
+		const day = (dayLabel || "").toLowerCase();
+		if (day.includes("friday")) return 1;
+		if (day.includes("saturday")) return 2;
+		if (day.includes("sunday")) return 3;
+		return 99;
 	}
 
 	// Parse time for sorting (convert to minutes since start of day)
@@ -1789,7 +2090,7 @@ class FestivalPlanner {
 		return newState;
 	}
 
-	// Show message to choose a person first when My Schedule is enabled but no name is selected
+	// Show message to choose a person first when My Schedule is selected but no name is selected
 	showChoosePersonMessage() {
 		// Remove any existing message first
 		this.removeChoosePersonMessage();
@@ -1813,7 +2114,7 @@ class FestivalPlanner {
 					</div>
 					<div class="step">
 						<span class="step-number">2</span>
-						<span class="step-text">Click "My Schedule" to see your shows</span>
+						<span class="step-text">Switch Schedule to "My Schedule"</span>
 					</div>
 				</div>
 			</div>
