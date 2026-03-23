@@ -657,6 +657,9 @@ body.modal-open {
 	align-items: flex-start;
 	gap: 8px;
 	margin-bottom: 10px;
+	position: relative;
+	padding-right: 150px;
+	min-height: 56px;
 }
 
 .show-meta {
@@ -673,7 +676,9 @@ body.modal-open {
 	border-radius: 6px;
 	font-size: 0.8rem;
 	font-weight: 600;
-	align-self: flex-end;
+	position: absolute;
+	top: 0;
+	right: 0;
 }
 
 .show-title {
@@ -1583,8 +1588,8 @@ body.modal-open {
 
 .all-together-toggle {
 	position: absolute;
-	top: 8px;
-	left: 8px;
+	top: 0;
+	right: 76px;
 	z-index: 20;
 	display: inline-flex;
 	align-items: center;
@@ -1671,18 +1676,23 @@ body.modal-open {
 		display: none;
 	}
 
-	.all-together-toggle {
-		left: auto;
-		top: auto;
-		right: 8px;
-		bottom: 8px;
-		padding-right: 6px;
-		background: rgba(6, 20, 24, 0.92);
+	.show-header {
+		padding-right: 96px;
+		min-height: 48px;
 	}
 
-	.show,
-	.chronological-show {
-		padding-bottom: 42px;
+	.show-time {
+		font-size: 0.72rem;
+		padding: 4px 7px;
+	}
+
+	.all-together-toggle {
+		top: 0;
+		right: 58px;
+		bottom: auto;
+		left: auto;
+		padding-right: 6px;
+		background: rgba(6, 20, 24, 0.92);
 	}
 }
 
