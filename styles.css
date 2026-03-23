@@ -657,9 +657,6 @@ body.modal-open {
 	align-items: flex-start;
 	gap: 8px;
 	margin-bottom: 10px;
-	position: relative;
-	padding-right: 150px;
-	min-height: 56px;
 }
 
 .show-meta {
@@ -676,9 +673,7 @@ body.modal-open {
 	border-radius: 6px;
 	font-size: 0.8rem;
 	font-weight: 600;
-	position: absolute;
-	top: 0;
-	right: 0;
+	align-self: flex-end;
 }
 
 .show-title {
@@ -1208,6 +1203,9 @@ body.modal-open {
 	top: 8px;
 	right: 8px;
 	z-index: 10;
+	display: flex;
+	align-items: center;
+	gap: 6px;
 }
 
 .comments-toggle-btn {
@@ -1587,30 +1585,27 @@ body.modal-open {
 }
 
 .all-together-toggle {
-	position: absolute;
-	top: 0;
-	right: 76px;
-	z-index: 20;
-	display: inline-flex;
+	position: relative;
+	z-index: 10;
+	display: flex;
 	align-items: center;
-	gap: 6px;
-	padding: 4px 9px 4px 6px;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
 	border-radius: 999px;
 	border: 1px solid rgba(80, 227, 194, 0.28);
 	background: rgba(6, 20, 24, 0.8);
-	color: #bfeee3;
+	color: transparent;
 	font: inherit;
-	font-size: 0.68rem;
-	font-weight: 700;
-	letter-spacing: 0.05em;
-	text-transform: uppercase;
 	cursor: pointer;
 	backdrop-filter: blur(6px);
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .all-together-toggle:hover {
 	border-color: rgba(80, 227, 194, 0.62);
-	color: #effffb;
+	transform: scale(1.1);
 }
 
 .all-together-toggle.active {
@@ -1621,11 +1616,15 @@ body.modal-open {
 }
 
 .all-together-toggle-dot {
-	width: 10px;
-	height: 10px;
+	width: 8px;
+	height: 8px;
 	border-radius: 50%;
 	background: rgba(80, 227, 194, 0.52);
 	box-shadow: 0 0 10px rgba(80, 227, 194, 0.35);
+}
+
+.all-together-toggle-text {
+	display: none;
 }
 
 .all-together-toggle.active .all-together-toggle-dot {
@@ -1672,26 +1671,9 @@ body.modal-open {
 }
 
 @media (max-width: 768px) {
-	.all-together-toggle-text {
-		display: none;
-	}
-
-	.show-header {
-		padding-right: 96px;
-		min-height: 48px;
-	}
-
-	.show-time {
-		font-size: 0.72rem;
-		padding: 4px 7px;
-	}
-
 	.all-together-toggle {
-		top: 0;
-		right: 58px;
-		bottom: auto;
-		left: auto;
-		padding-right: 6px;
+		width: 22px;
+		height: 22px;
 		background: rgba(6, 20, 24, 0.92);
 	}
 }

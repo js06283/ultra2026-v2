@@ -2275,6 +2275,8 @@ class FestivalPlanner {
 		const showId = showElement?.dataset?.show;
 		if (!showId) return;
 
+		const controlsContainer =
+			showElement.querySelector(".comments-section") || showElement;
 		let toggle = showElement.querySelector(".all-together-toggle");
 		if (!toggle) {
 			toggle = document.createElement("button");
@@ -2290,7 +2292,7 @@ class FestivalPlanner {
 				e.stopPropagation();
 				await this.toggleAllTogether(showId);
 			});
-			showElement.appendChild(toggle);
+			controlsContainer.appendChild(toggle);
 		}
 
 		toggle.dataset.show = showId;
