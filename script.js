@@ -2825,9 +2825,11 @@ class FestivalPlanner {
 			const secondaryTextColor =
 				textColor === "#081126" ? "rgba(8, 17, 38, 0.78)" : "rgba(248, 251, 255, 0.84)";
 			const showIconsInBody = entry.icons.length && height > 118;
-			const iconColumnWidth = showIconsInBody ? 40 : 0;
+			const iconRows = showIconsInBody
+				? Math.ceil(entry.icons.length / Math.max(1, this.getTimelineIconColumns(width)))
+				: 0;
 			const textInsetX = 10;
-			const bodyTextWidth = width - textInsetX * 2 - iconColumnWidth;
+			const bodyTextWidth = width - textInsetX * 2;
 
 			ctx.fillStyle = blockFill;
 			this.roundRect(ctx, x, y, width, height, 14);
@@ -2862,7 +2864,7 @@ class FestivalPlanner {
 				this.drawFittedText(
 					ctx,
 					line,
-					x + (width - iconColumnWidth) / 2,
+					x + width / 2,
 					y + 18 + lineIndex * (titleFontSize + 4),
 					bodyTextWidth,
 					titleFontSize,
@@ -2874,21 +2876,29 @@ class FestivalPlanner {
 
 			if (showIconsInBody) {
 				const iconTop =
-					y + 20 + titleLines.length * (titleFontSize + 4) + 4;
-				this.drawHorizontalTimelineIcons(
+					y + 20 + titleLines.length * (titleFontSize + 4) + 6;
+				this.drawWrappedTimelineIcons(
 					ctx,
 					entry.icons,
 					x + width / 2,
 					iconTop,
-					textColor
+					width - 18
 				);
 			}
 
+			const timeY =
+				y +
+				Math.max(
+					height - 38,
+					24 +
+						titleLines.length * (titleFontSize + 4) +
+						(showIconsInBody ? iconRows * 30 + 12 : 0)
+				);
 			this.drawFittedText(
 				ctx,
 				entry.startTime,
 				x + width / 2,
-				y + height - 38,
+				timeY,
 				width - 14,
 				timeFontSize,
 				700,
@@ -2901,16 +2911,27 @@ class FestivalPlanner {
 		});
 	}
 
-	drawHorizontalTimelineIcons(ctx, icons, centerX, topY) {
-		const visibleIcons = icons.slice(0, 3);
+	getTimelineIconColumns(width) {
+		if (width < 110) return 2;
+		if (width < 145) return 3;
+		return 4;
+	}
+
+	drawWrappedTimelineIcons(ctx, icons, centerX, topY, maxWidth) {
 		const size = 24;
 		const gap = 8;
-		const totalWidth =
-			visibleIcons.length * size + Math.max(0, visibleIcons.length - 1) * gap;
-		const startX = centerX - totalWidth / 2;
-		visibleIcons.forEach((icon, index) => {
-			const x = startX + index * (size + gap);
-			const y = topY;
+		const columns = Math.max(
+			1,
+			Math.min(this.getTimelineIconColumns(maxWidth), icons.length)
+		);
+		const rows = Math.ceil(icons.length / columns);
+		const rowWidth = columns * size + Math.max(0, columns - 1) * gap;
+		const startX = centerX - rowWidth / 2;
+		icons.forEach((icon, index) => {
+			const row = Math.floor(index / columns);
+			const column = index % columns;
+			const x = startX + column * (size + gap);
+			const y = topY + row * (size + 6);
 			ctx.fillStyle =
 				icon.state === "must-see"
 					? this.darkenColor(icon.color, 0.25)
@@ -3066,7 +3087,7 @@ class FestivalPlanner {
 		const timeWidth = 185;
 		const padX = 32;
 		const textX = frame.x + timeWidth + 28;
-		const iconAreaWidth = entry.icons.length ? 132 : 0;
+		const iconAreaWidth = entry.icons.length ? 162 : 0;
 		const availableTextWidth = frame.width - timeWidth - 60 - iconAreaWidth;
 		const titleStartY = frame.y + (entry.allTogether ? 58 : 20);
 		const titleLines = this.wrapText(
@@ -3083,10 +3104,10 @@ class FestivalPlanner {
 		ctx.fillText(entry.startTime, frame.x + padX, frame.y + 26);
 
 		if (entry.icons.length) {
-			this.drawInterestIconsRight(
+			this.drawInterestIconsRightHorizontal(
 				ctx,
 				entry.icons,
-				frame.x + frame.width - 28,
+				frame.x + frame.width - 26,
 				frame.y + frame.height / 2
 			);
 		}
@@ -3138,19 +3159,24 @@ class FestivalPlanner {
 		});
 	}
 
-	drawInterestIconsRight(ctx, icons, rightX, centerY) {
-		const visibleIcons = icons.slice(0, 4);
+	drawInterestIconsRightHorizontal(ctx, icons, rightX, centerY) {
+		const visibleIcons = icons;
 		const chipWidth = 48;
 		const chipHeight = 34;
 		const gap = 10;
+		const columns = 2;
+		const rows = Math.ceil(visibleIcons.length / columns);
+		const totalWidth = columns * chipWidth + gap;
 		const totalHeight =
-			visibleIcons.length * chipHeight +
-			Math.max(0, visibleIcons.length - 1) * gap;
+			rows * chipHeight + Math.max(0, rows - 1) * gap;
+		const startX = rightX - totalWidth;
 		const topY = centerY - totalHeight / 2;
 
 		visibleIcons.forEach((icon, index) => {
-			const chipX = rightX - chipWidth;
-			const chipY = topY + index * (chipHeight + gap);
+			const row = Math.floor(index / columns);
+			const col = index % columns;
+			const chipX = startX + col * (chipWidth + gap);
+			const chipY = topY + row * (chipHeight + gap);
 			ctx.fillStyle =
 				icon.state === "must-see"
 					? this.darkenColor(icon.color, 0.25)
