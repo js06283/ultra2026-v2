@@ -2824,6 +2824,10 @@ class FestivalPlanner {
 			const textColor = this.getContrastTextColor(blockFill);
 			const secondaryTextColor =
 				textColor === "#081126" ? "rgba(8, 17, 38, 0.78)" : "rgba(248, 251, 255, 0.84)";
+			const showIconsInBody = entry.icons.length && height > 118;
+			const iconColumnWidth = showIconsInBody ? 40 : 0;
+			const textInsetX = 10;
+			const bodyTextWidth = width - textInsetX * 2 - iconColumnWidth;
 
 			ctx.fillStyle = blockFill;
 			this.roundRect(ctx, x, y, width, height, 14);
@@ -2844,11 +2848,11 @@ class FestivalPlanner {
 			}
 
 			const titleFontSize = height > 140 ? 24 : height > 100 ? 21 : 18;
-			const timeFontSize = height > 100 ? 18 : 16;
+			const timeFontSize = height > 140 ? 24 : height > 100 ? 22 : 19;
 			const titleLines = this.wrapText(
 				ctx,
 				entry.title,
-				width - (height > 116 ? 48 : 18),
+				bodyTextWidth,
 				`700 ${titleFontSize}px "Rajdhani", sans-serif`,
 				height > 130 ? 3 : 2
 			);
@@ -2858,9 +2862,9 @@ class FestivalPlanner {
 				this.drawFittedText(
 					ctx,
 					line,
-					x + width / 2,
+					x + (width - iconColumnWidth) / 2,
 					y + 18 + lineIndex * (titleFontSize + 4),
-					width - (height > 116 ? 54 : 18),
+					bodyTextWidth,
 					titleFontSize,
 					700,
 					textColor,
@@ -2868,38 +2872,45 @@ class FestivalPlanner {
 				);
 			});
 
+			if (showIconsInBody) {
+				const iconTop =
+					y + 20 + titleLines.length * (titleFontSize + 4) + 4;
+				this.drawHorizontalTimelineIcons(
+					ctx,
+					entry.icons,
+					x + width / 2,
+					iconTop,
+					textColor
+				);
+			}
+
 			this.drawFittedText(
 				ctx,
 				entry.startTime,
 				x + width / 2,
-				y + height - 34,
-				width - 18,
+				y + height - 38,
+				width - 14,
 				timeFontSize,
 				700,
 				secondaryTextColor,
 				"Rajdhani"
 			);
 
-			if (entry.icons.length && height > 116) {
-				this.drawStackedTimelineIcons(
-					ctx,
-					entry.icons,
-					x + width - 12,
-					y + 12
-				);
-			}
-
 			ctx.textAlign = "left";
 			ctx.textBaseline = "top";
 		});
 	}
 
-	drawStackedTimelineIcons(ctx, icons, rightX, topY) {
+	drawHorizontalTimelineIcons(ctx, icons, centerX, topY) {
 		const visibleIcons = icons.slice(0, 3);
+		const size = 24;
+		const gap = 8;
+		const totalWidth =
+			visibleIcons.length * size + Math.max(0, visibleIcons.length - 1) * gap;
+		const startX = centerX - totalWidth / 2;
 		visibleIcons.forEach((icon, index) => {
-			const size = 24;
-			const x = rightX - size;
-			const y = topY + index * (size + 6);
+			const x = startX + index * (size + gap);
+			const y = topY;
 			ctx.fillStyle =
 				icon.state === "must-see"
 					? this.darkenColor(icon.color, 0.25)
@@ -3055,7 +3066,8 @@ class FestivalPlanner {
 		const timeWidth = 185;
 		const padX = 32;
 		const textX = frame.x + timeWidth + 28;
-		const availableTextWidth = frame.width - timeWidth - 60;
+		const iconAreaWidth = entry.icons.length ? 132 : 0;
+		const availableTextWidth = frame.width - timeWidth - 60 - iconAreaWidth;
 		const titleStartY = frame.y + (entry.allTogether ? 58 : 20);
 		const titleLines = this.wrapText(
 			ctx,
@@ -3070,7 +3082,14 @@ class FestivalPlanner {
 		ctx.textBaseline = "top";
 		ctx.fillText(entry.startTime, frame.x + padX, frame.y + 26);
 
-		this.drawInterestIcons(ctx, entry.icons, frame.x + padX, frame.y + frame.height - 48);
+		if (entry.icons.length) {
+			this.drawInterestIconsRight(
+				ctx,
+				entry.icons,
+				frame.x + frame.width - 28,
+				frame.y + frame.height / 2
+			);
+		}
 
 		ctx.fillStyle = "#f3f7ff";
 		ctx.font = '700 42px "Rajdhani", sans-serif';
@@ -3107,6 +3126,43 @@ class FestivalPlanner {
 				ctx.fillStyle = "#ffd978";
 				ctx.font = '700 16px "Rajdhani", sans-serif';
 				ctx.fillText("★", chipX + chipWidth - 16, chipY - 2);
+			}
+
+			ctx.fillStyle = "#081126";
+			ctx.font = '800 18px "Orbitron", sans-serif';
+			ctx.textAlign = "center";
+			ctx.textBaseline = "middle";
+			ctx.fillText(icon.label, chipX + chipWidth / 2, chipY + chipHeight / 2 + 1);
+			ctx.textAlign = "left";
+			ctx.textBaseline = "top";
+		});
+	}
+
+	drawInterestIconsRight(ctx, icons, rightX, centerY) {
+		const visibleIcons = icons.slice(0, 4);
+		const chipWidth = 48;
+		const chipHeight = 34;
+		const gap = 10;
+		const totalHeight =
+			visibleIcons.length * chipHeight +
+			Math.max(0, visibleIcons.length - 1) * gap;
+		const topY = centerY - totalHeight / 2;
+
+		visibleIcons.forEach((icon, index) => {
+			const chipX = rightX - chipWidth;
+			const chipY = topY + index * (chipHeight + gap);
+			ctx.fillStyle =
+				icon.state === "must-see"
+					? this.darkenColor(icon.color, 0.25)
+					: icon.color;
+			this.roundRect(ctx, chipX, chipY, chipWidth, chipHeight, 17);
+			ctx.fill();
+
+			if (icon.state === "must-see") {
+				ctx.strokeStyle = "rgba(255,220,132,0.95)";
+				ctx.lineWidth = 2;
+				this.roundRect(ctx, chipX, chipY, chipWidth, chipHeight, 17);
+				ctx.stroke();
 			}
 
 			ctx.fillStyle = "#081126";
