@@ -3,6 +3,7 @@ class FestivalPlanner {
 		this.attendees = new Map(); // Map of showId to Set of attendee names
 		this.attendeeStates = new Map(); // Map of showId to Map of name to state
 		this.comments = new Map(); // Map of showId to Array of comment objects
+		this.allTogetherShows = new Set();
 		this.currentName = null;
 		this.currentDay = "all";
 		this.scheduleMode = "all"; // all | my | group
@@ -10,6 +11,7 @@ class FestivalPlanner {
 		this.scheduleLoaded = false;
 		this.dataService = null;
 		this.unsubscribe = null;
+		this.lockscreenPreviewUrl = null;
 
 		// Unique colors for each person
 		this.personColors = {
@@ -79,6 +81,32 @@ class FestivalPlanner {
 
 		// Wait for schedule to load before rendering
 		this.waitForSchedule();
+	}
+
+	loadAllTogetherFlags() {
+		try {
+			const raw = localStorage.getItem("festivalPlannerAllTogetherShows");
+			if (!raw) {
+				this.allTogetherShows = new Set();
+				return;
+			}
+			const ids = JSON.parse(raw);
+			this.allTogetherShows = new Set(Array.isArray(ids) ? ids : []);
+		} catch (error) {
+			console.error("Error loading all-together flags:", error);
+			this.allTogetherShows = new Set();
+		}
+	}
+
+	saveAllTogetherFlags() {
+		try {
+			localStorage.setItem(
+				"festivalPlannerAllTogetherShows",
+				JSON.stringify(Array.from(this.allTogetherShows))
+			);
+		} catch (error) {
+			console.error("Error saving all-together flags:", error);
+		}
 	}
 
 	// Wait for the schedule to be loaded
@@ -209,15 +237,67 @@ class FestivalPlanner {
 		}
 
 		// Handle Timeline toggle
-		const timelineToggle = document.getElementById("timelineToggle");
+			const timelineToggle = document.getElementById("timelineToggle");
 		if (timelineToggle) {
 			timelineToggle.addEventListener("click", () => {
 				this.toggleTimeline();
 			});
 		}
 
+		const exportLockscreenBtn = document.getElementById("exportLockscreenBtn");
+		if (exportLockscreenBtn) {
+			exportLockscreenBtn.addEventListener("click", () => {
+				this.openLockscreenExportModal();
+			});
+		}
+
+		const lockscreenModal = document.getElementById("lockscreenExportModal");
+		if (lockscreenModal) {
+			lockscreenModal.addEventListener("click", (e) => {
+				if (e.target.matches("[data-close-lockscreen-modal]")) {
+					this.closeLockscreenExportModal();
+				}
+			});
+		}
+
+		const lockscreenControls = [
+			document.getElementById("lockscreenDaySelect"),
+			document.getElementById("lockscreenSourceSelect"),
+			document.getElementById("lockscreenLayoutSelect"),
+		];
+		lockscreenControls.forEach((control) => {
+			if (!control) return;
+			control.addEventListener("change", () => {
+				this.refreshLockscreenPreview();
+			});
+		});
+
+		const refreshPreviewBtn = document.getElementById(
+			"refreshLockscreenPreviewBtn"
+		);
+		if (refreshPreviewBtn) {
+			refreshPreviewBtn.addEventListener("click", () => {
+				this.refreshLockscreenPreview();
+			});
+		}
+
+		const downloadLockscreenBtn = document.getElementById(
+			"downloadLockscreenBtn"
+		);
+		if (downloadLockscreenBtn) {
+			downloadLockscreenBtn.addEventListener("click", async () => {
+				await this.downloadLockscreenExport();
+			});
+		}
+
 		// Show click functionality - use event delegation for dynamic content
 		document.addEventListener("click", (e) => {
+			if (
+				e.target.closest(".comments-section") ||
+				e.target.closest(".all-together-toggle")
+			) {
+				return;
+			}
 			const show = e.target.closest(".show");
 			if (show && this.currentName) {
 				this.toggleAttendee(show);
@@ -725,6 +805,7 @@ class FestivalPlanner {
 						Math.round((show.end - show.start) * pxPerMinute)
 					)}px`;
 					block.innerHTML = `
+						<div class="timeline-all-together-indicator" aria-hidden="true"></div>
 						<div class="timeline-show-title">${this.escapeHtml(show.title)}</div>
 						<div class="timeline-show-time">${this.escapeHtml(show.timeText)}</div>
 						<div class="timeline-show-tags"></div>
@@ -959,6 +1040,8 @@ class FestivalPlanner {
 			commentsSection.appendChild(commentsToggle);
 			showElement.appendChild(commentsSection);
 		}
+
+		this.addAllTogetherControl(showElement);
 
 		// Prevent comment controls from triggering show click handlers underneath.
 		commentsSection.addEventListener("click", (e) => {
@@ -1245,6 +1328,7 @@ class FestivalPlanner {
 		});
 
 		this.updateTimelineSelections();
+		this.renderAllTogetherIndicators();
 	}
 
 	async saveData() {
@@ -1254,6 +1338,7 @@ class FestivalPlanner {
 				attendees: {},
 				attendeeStates: {},
 				comments: {},
+				allTogetherShows: Array.from(this.allTogetherShows),
 			};
 
 			// Save attendees
@@ -1280,6 +1365,8 @@ class FestivalPlanner {
 
 			localStorage.setItem("festivalPlannerData", JSON.stringify(data));
 		}
+
+		this.saveAllTogetherFlags();
 	}
 
 	async loadData() {
@@ -1290,11 +1377,13 @@ class FestivalPlanner {
 				this.attendees = data.attendees || new Map();
 				this.attendeeStates = data.attendeeStates || data.states || new Map();
 				this.comments = data.comments || new Map();
+				this.loadAllTogetherFlags();
 			} catch (error) {
 				console.error("Error loading data from data service:", error);
 				this.attendees = new Map();
 				this.attendeeStates = new Map();
 				this.comments = new Map();
+				this.loadAllTogetherFlags();
 			}
 		} else {
 			// Fallback to localStorage
@@ -1337,9 +1426,18 @@ class FestivalPlanner {
 							);
 						});
 					}
+
+					if (Array.isArray(data.allTogetherShows)) {
+						this.allTogetherShows = new Set(data.allTogetherShows);
+					} else {
+						this.loadAllTogetherFlags();
+					}
 				} catch (error) {
 					console.error("Error loading saved data:", error);
+					this.loadAllTogetherFlags();
 				}
+			} else {
+				this.loadAllTogetherFlags();
 			}
 		}
 	}
@@ -1478,6 +1576,7 @@ class FestivalPlanner {
 				attendees: {},
 				attendeeStates: {},
 				comments: {},
+				allTogetherShows: Array.from(this.allTogetherShows),
 			};
 
 			// Export attendees
@@ -1534,6 +1633,7 @@ class FestivalPlanner {
 				this.attendees.clear();
 				this.attendeeStates.clear();
 				this.comments.clear();
+				this.allTogetherShows.clear();
 
 				// Import attendees
 				if (data.attendees) {
@@ -1563,6 +1663,12 @@ class FestivalPlanner {
 								timestamp: comment.timestamp,
 							}))
 						);
+					});
+				}
+
+				if (Array.isArray(data.allTogetherShows)) {
+					data.allTogetherShows.forEach((showId) => {
+						this.allTogetherShows.add(showId);
 					});
 				}
 
@@ -1912,6 +2018,8 @@ class FestivalPlanner {
 			}
 		});
 
+		this.addAllTogetherControl(showElement);
+
 		return showElement;
 	}
 
@@ -2142,6 +2250,914 @@ class FestivalPlanner {
 		// Check if it's late-night (12am-6am)
 		return hours >= 0 && hours < 6;
 	}
+
+	isAllTogether(showId) {
+		return this.allTogetherShows.has(showId);
+	}
+
+	async toggleAllTogether(showId) {
+		if (this.isAllTogether(showId)) {
+			this.allTogetherShows.delete(showId);
+		} else {
+			this.allTogetherShows.add(showId);
+		}
+
+		this.saveAllTogetherFlags();
+		this.renderAllTogetherIndicators();
+
+		const modal = document.getElementById("lockscreenExportModal");
+		if (modal?.classList.contains("show")) {
+			await this.refreshLockscreenPreview();
+		}
+	}
+
+	addAllTogetherControl(showElement) {
+		const showId = showElement?.dataset?.show;
+		if (!showId) return;
+
+		let toggle = showElement.querySelector(".all-together-toggle");
+		if (!toggle) {
+			toggle = document.createElement("button");
+			toggle.type = "button";
+			toggle.className = "all-together-toggle";
+			toggle.setAttribute("aria-label", "Toggle all-together set");
+			toggle.setAttribute("title", "Mark as all-together set");
+			toggle.innerHTML = `
+				<span class="all-together-toggle-dot"></span>
+				<span class="all-together-toggle-text">All-together</span>
+			`;
+			toggle.addEventListener("click", async (e) => {
+				e.stopPropagation();
+				await this.toggleAllTogether(showId);
+			});
+			showElement.appendChild(toggle);
+		}
+
+		toggle.dataset.show = showId;
+	}
+
+	renderAllTogetherIndicators() {
+		document.querySelectorAll("[data-show]").forEach((showElement) => {
+			const showId = showElement.dataset.show;
+			if (!showId) return;
+
+			const active = this.isAllTogether(showId);
+			showElement.classList.toggle("all-together-show", active);
+
+			const toggle = showElement.querySelector(".all-together-toggle");
+			if (toggle) {
+				toggle.classList.toggle("active", active);
+				toggle.setAttribute(
+					"title",
+					active ? "Remove all-together flag" : "Mark as all-together set"
+				);
+			}
+
+			const timelineBadge = showElement.querySelector(".timeline-all-together-indicator");
+			if (timelineBadge) {
+				timelineBadge.classList.toggle("active", active);
+				timelineBadge.setAttribute(
+					"aria-hidden",
+					active ? "false" : "true"
+				);
+			}
+		});
+	}
+
+	openLockscreenExportModal() {
+		const modal = document.getElementById("lockscreenExportModal");
+		const daySelect = document.getElementById("lockscreenDaySelect");
+		const sourceSelect = document.getElementById("lockscreenSourceSelect");
+		const layoutSelect = document.getElementById("lockscreenLayoutSelect");
+		if (!modal || !daySelect || !sourceSelect || !layoutSelect) return;
+
+		this.populateLockscreenDayOptions(daySelect);
+		sourceSelect.value = "all";
+		layoutSelect.value = "chronological";
+
+		modal.classList.add("show");
+		modal.setAttribute("aria-hidden", "false");
+		document.body.classList.add("modal-open");
+		this.refreshLockscreenPreview();
+	}
+
+	closeLockscreenExportModal() {
+		const modal = document.getElementById("lockscreenExportModal");
+		if (!modal) return;
+		modal.classList.remove("show");
+		modal.setAttribute("aria-hidden", "true");
+		document.body.classList.remove("modal-open");
+	}
+
+	populateLockscreenDayOptions(selectEl) {
+		const availableDays = this.getExportDays();
+		selectEl.innerHTML = availableDays
+			.map(
+				(day) =>
+					`<option value="${this.escapeHtml(day.value)}">${this.escapeHtml(
+						day.label
+					)}</option>`
+			)
+			.join("");
+
+		const preferred =
+			this.currentDay !== "all"
+				? availableDays.find((day) => day.value === this.currentDay)
+				: availableDays[0];
+		if (preferred) {
+			selectEl.value = preferred.value;
+		}
+	}
+
+	getExportDays() {
+		const allShows = this.getAllShowsForChronological();
+		const seen = new Map();
+		allShows.forEach((show) => {
+			const key = this.normalizeDayValue(show.originalDay || show.day);
+			if (!seen.has(key)) {
+				seen.set(key, {
+					value: key,
+					label: show.originalDay || show.day,
+				});
+			}
+		});
+		return Array.from(seen.values()).sort(
+			(a, b) => this.getDaySortKey(a.label) - this.getDaySortKey(b.label)
+		);
+	}
+
+	normalizeDayValue(dayLabel) {
+		const day = String(dayLabel || "").toLowerCase();
+		if (day.includes("friday")) return "friday";
+		if (day.includes("saturday")) return "saturday";
+		if (day.includes("sunday")) return "sunday";
+		return day.replace(/[^a-z0-9]+/g, "-");
+	}
+
+	getLockscreenOptions() {
+		return {
+			day: document.getElementById("lockscreenDaySelect")?.value || "friday",
+			source:
+				document.getElementById("lockscreenSourceSelect")?.value || "my",
+			layout:
+				document.getElementById("lockscreenLayoutSelect")?.value ||
+				"chronological",
+		};
+	}
+
+	async refreshLockscreenPreview() {
+		const previewStatus = document.getElementById("lockscreenPreviewStatus");
+		const previewImage = document.getElementById("lockscreenPreviewImage");
+		const downloadBtn = document.getElementById("downloadLockscreenBtn");
+		if (!previewStatus || !previewImage || !downloadBtn) return;
+
+		previewStatus.textContent = "Rendering lockscreen preview...";
+		downloadBtn.disabled = true;
+
+		try {
+			const result = await this.renderLockscreenExport(this.getLockscreenOptions());
+			if (!result.ok) {
+				previewImage.removeAttribute("src");
+				previewImage.style.display = "none";
+				previewStatus.textContent = result.message;
+				return;
+			}
+
+			if (this.lockscreenPreviewUrl) {
+				URL.revokeObjectURL(this.lockscreenPreviewUrl);
+			}
+			this.lockscreenPreviewUrl = result.url;
+			previewImage.src = result.url;
+			previewImage.style.display = "block";
+			previewStatus.textContent = result.message;
+			downloadBtn.disabled = false;
+		} catch (error) {
+			console.error("Lockscreen preview failed:", error);
+			previewImage.removeAttribute("src");
+			previewImage.style.display = "none";
+			previewStatus.textContent =
+				"Preview failed to render. Try refreshing again.";
+		}
+	}
+
+	async downloadLockscreenExport() {
+		const result = await this.renderLockscreenExport(this.getLockscreenOptions());
+		if (!result.ok || !result.blob) {
+			this.showNotification(result.message || "Export failed", "error");
+			return;
+		}
+
+		const dayLabel = result.meta?.dayLabel || "schedule";
+		const sourceLabel = result.meta?.source || "my";
+		const layoutLabel = result.meta?.layout || "chronological";
+		const slug = `${dayLabel}-${sourceLabel}-${layoutLabel}`
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, "-")
+			.replace(/^-|-$/g, "");
+
+		const url = URL.createObjectURL(result.blob);
+		const link = document.createElement("a");
+		link.href = url;
+		link.download = `ultra-lockscreen-${slug}.png`;
+		link.click();
+		URL.revokeObjectURL(url);
+		this.showNotification("Lockscreen PNG downloaded", "success");
+	}
+
+	async renderLockscreenExport(options) {
+		const prepared = this.prepareLockscreenData(options);
+		if (!prepared.ok) return prepared;
+
+		await this.waitForFonts();
+		const canvas = this.drawLockscreenCanvas(prepared);
+		const blob = await new Promise((resolve) =>
+			canvas.toBlob(resolve, "image/png")
+		);
+		if (!blob) {
+			return {
+				ok: false,
+				message: "PNG export is not supported in this browser.",
+			};
+		}
+		const url = URL.createObjectURL(blob);
+		return {
+			ok: true,
+			blob,
+			url,
+			message: `${prepared.dayLabel} ${prepared.sourceLabel} preview ready.`,
+			meta: {
+				dayLabel: prepared.dayValue,
+				source: prepared.source,
+				layout: prepared.layout,
+			},
+		};
+	}
+
+	waitForFonts() {
+		if (document.fonts && document.fonts.ready) {
+			return document.fonts.ready.catch(() => undefined);
+		}
+		return Promise.resolve();
+	}
+
+	prepareLockscreenData(options) {
+		const source =
+			options.source === "group"
+				? "group"
+				: options.source === "all"
+				? "all"
+				: "my";
+		if (source === "my" && !this.currentName) {
+			return {
+				ok: false,
+				message: "Select your name first to export your personal lockscreen.",
+			};
+		}
+
+		const layout =
+			options.layout === "timeline" ? "timeline" : "chronological";
+		const dayValue = this.normalizeDayValue(options.day);
+		const allShows = this.getAllShowsForChronological();
+		const dayShows = allShows.filter(
+			(show) => this.normalizeDayValue(show.originalDay || show.day) === dayValue
+		);
+
+		const filteredShows = dayShows.filter((show) => {
+			if (source === "all") return true;
+			if (source === "my") return this.isUserAttending(show.id);
+			return this.isGroupInterested(show.id);
+		});
+
+		if (!filteredShows.length) {
+			return {
+				ok: false,
+				message:
+					source === "my"
+						? "No saved sets found for that day."
+						: source === "all"
+						? "No shows found for that day."
+						: "No group-selected sets found for that day.",
+			};
+		}
+
+		const dayLabel = dayShows[0]?.originalDay || dayValue;
+		const entries = filteredShows.map((show) => ({
+			id: show.id,
+			title: show.title,
+			stageName: show.stageName,
+			stageColor: show.stageColor || "#62b8ff",
+			startTime: this.extractStartTime(show.time),
+			timeRange: show.time,
+			startMinutes: this.parseClockToMinutes(this.extractStartTime(show.time)) || 0,
+			endMinutes: this.getEndMinutesFromRange(show.time),
+			allTogether: this.isAllTogether(show.id),
+			icons: this.getLockscreenIconsForShow(show.id, source),
+		}));
+
+		return {
+			ok: true,
+			layout,
+			source,
+			sourceLabel:
+				source === "my"
+					? "Your Sets"
+					: source === "group"
+					? "Group Sets"
+					: "All Shows",
+			dayValue,
+			dayLabel,
+			entries,
+		};
+	}
+
+	extractStartTime(timeRange) {
+		return String(timeRange || "")
+			.split("-")[0]
+			.trim();
+	}
+
+	getEndMinutesFromRange(timeRange) {
+		const parts = String(timeRange || "")
+			.split("-")
+			.map((part) => part.trim());
+		const start = this.parseClockToMinutes(parts[0]);
+		let end = this.parseClockToMinutes(parts[1]);
+		if (start == null) return 0;
+		if (end == null) return start + 60;
+		if (end <= start) end += 24 * 60;
+		return end;
+	}
+
+	getLockscreenIconsForShow(showId, source) {
+		if (source === "my") {
+			const state = this.getAttendeeState(showId, this.currentName);
+			return [
+				{
+					label: this.getInitials(this.currentName),
+					color: this.getPersonColor(this.currentName),
+					state,
+				},
+			];
+		}
+
+		const names = this.getInterestedNames(showId).sort((a, b) => {
+			const aState = this.getAttendeeState(showId, a) === "must-see" ? 0 : 1;
+			const bState = this.getAttendeeState(showId, b) === "must-see" ? 0 : 1;
+			if (aState !== bState) return aState - bState;
+			return a.localeCompare(b);
+		});
+
+		return names.slice(0, 4).map((name) => ({
+			label: this.getInitials(name),
+			color: this.getPersonColor(name),
+			state: this.getAttendeeState(showId, name),
+		})).concat(
+			names.length > 4
+				? [
+						{
+							label: `+${names.length - 4}`,
+							color: "#d7e5ff",
+							state: "normal",
+						},
+				  ]
+				: []
+		);
+	}
+
+	drawLockscreenCanvas(data) {
+		const width = 1290;
+		const height = 2796;
+		const canvas = document.createElement("canvas");
+		canvas.width = width;
+		canvas.height = height;
+		const ctx = canvas.getContext("2d");
+
+		const gradient = ctx.createLinearGradient(0, 0, width, height);
+		gradient.addColorStop(0, "#090f2f");
+		gradient.addColorStop(0.45, "#070b20");
+		gradient.addColorStop(1, "#03040d");
+		ctx.fillStyle = gradient;
+		ctx.fillRect(0, 0, width, height);
+
+		this.drawBackgroundGlow(ctx, width, height);
+
+		const paddingX = 108;
+		const topSafe = 360;
+		const bottomSafe = 180;
+		const contentWidth = width - paddingX * 2;
+
+		ctx.fillStyle = "rgba(255,255,255,0.07)";
+		this.roundRect(ctx, paddingX - 18, topSafe - 36, contentWidth + 36, height - topSafe - bottomSafe + 72, 42);
+		ctx.fill();
+
+		ctx.fillStyle = "#8ea4d8";
+		ctx.font = '600 42px "Rajdhani", sans-serif';
+		ctx.textBaseline = "top";
+		ctx.fillText("ULTRA LOCKSCREEN", paddingX, topSafe);
+
+		ctx.fillStyle = "#f4f7ff";
+		ctx.font = '800 88px "Orbitron", sans-serif';
+		ctx.fillText(String(data.dayLabel || "").toUpperCase(), paddingX, topSafe + 54);
+
+		ctx.fillStyle = "#cbd8ff";
+		ctx.font = '600 42px "Rajdhani", sans-serif';
+		ctx.fillText(
+			`${data.sourceLabel}  •  ${data.layout === "timeline" ? "Timeline" : "Chronological"}`,
+			paddingX,
+			topSafe + 160
+		);
+
+		if (data.layout === "timeline") {
+			this.drawLockscreenTimeline(ctx, data.entries, {
+				x: paddingX,
+				y: topSafe + 250,
+				width: contentWidth,
+				height: height - (topSafe + 250) - bottomSafe,
+			});
+		} else {
+			this.drawLockscreenChronological(ctx, data.entries, {
+				x: paddingX,
+				y: topSafe + 250,
+				width: contentWidth,
+				height: height - (topSafe + 250) - bottomSafe,
+			});
+		}
+
+		ctx.fillStyle = "rgba(210,223,255,0.82)";
+		ctx.font = '500 30px "Rajdhani", sans-serif';
+		ctx.fillText("Start time only • static screenshot export", paddingX, height - 92);
+
+		return canvas;
+	}
+
+	drawBackgroundGlow(ctx, width, height) {
+		const glows = [
+			{ x: width * 0.2, y: height * 0.1, r: 320, color: "rgba(98,184,255,0.16)" },
+			{ x: width * 0.8, y: height * 0.18, r: 380, color: "rgba(181,133,255,0.12)" },
+			{ x: width * 0.5, y: height * 0.92, r: 420, color: "rgba(79,167,255,0.08)" },
+		];
+		glows.forEach((glow) => {
+			const radial = ctx.createRadialGradient(glow.x, glow.y, 0, glow.x, glow.y, glow.r);
+			radial.addColorStop(0, glow.color);
+			radial.addColorStop(1, "rgba(0,0,0,0)");
+			ctx.fillStyle = radial;
+			ctx.fillRect(glow.x - glow.r, glow.y - glow.r, glow.r * 2, glow.r * 2);
+		});
+	}
+
+	drawLockscreenChronological(ctx, entries, frame) {
+		const count = entries.length;
+		const gap = count > 10 ? 18 : 24;
+		const usableHeight = frame.height - gap * (count - 1);
+		const rowHeight = Math.max(118, Math.min(178, Math.floor(usableHeight / count)));
+
+		entries.forEach((entry, index) => {
+			const y = frame.y + index * (rowHeight + gap);
+			this.drawLockscreenEntryCard(ctx, entry, {
+				x: frame.x,
+				y,
+				width: frame.width,
+				height: rowHeight,
+				timeline: false,
+			});
+		});
+	}
+
+	drawLockscreenTimeline(ctx, entries, frame) {
+		const sortedStages = [];
+		entries.forEach((entry) => {
+			if (!sortedStages.find((stage) => stage.name === entry.stageName)) {
+				sortedStages.push({
+					name: entry.stageName,
+					color: entry.stageColor || "#62b8ff",
+				});
+			}
+		});
+
+		const minStart =
+			Math.floor(Math.min(...entries.map((entry) => entry.startMinutes)) / 60) * 60;
+		const maxEnd =
+			Math.ceil(Math.max(...entries.map((entry) => entry.endMinutes)) / 60) * 60;
+		const totalMinutes = Math.max(60, maxEnd - minStart);
+		const headerHeight = 112;
+		const axisWidth = 86;
+		const gridY = frame.y + headerHeight;
+		const gridHeight = frame.height - headerHeight;
+		const pxPerMinute = gridHeight / totalMinutes;
+		const columnWidth = (frame.width - axisWidth) / Math.max(sortedStages.length, 1);
+
+		ctx.strokeStyle = "rgba(230,240,255,0.38)";
+		ctx.lineWidth = 3;
+		ctx.beginPath();
+		ctx.moveTo(frame.x, frame.y + 68);
+		ctx.lineTo(frame.x + frame.width, frame.y + 68);
+		ctx.stroke();
+
+		sortedStages.forEach((stage, index) => {
+			const x = frame.x + axisWidth + index * columnWidth + 6;
+			const width = columnWidth - 12;
+			ctx.fillStyle = stage.color;
+			this.roundRect(ctx, x, frame.y + 10, width, 78, 18);
+			ctx.fill();
+			const stageTextColor = this.getContrastTextColor(stage.color);
+			ctx.fillStyle = stageTextColor;
+			ctx.textAlign = "center";
+			ctx.textBaseline = "middle";
+			const lines = this.wrapText(
+				ctx,
+				stage.name,
+				width - 20,
+				'700 24px "Rajdhani", sans-serif',
+				2
+			);
+			lines.forEach((line, lineIndex) => {
+				this.drawFittedText(
+					ctx,
+					line,
+					x + width / 2,
+					frame.y + 35 + lineIndex * 24,
+					width - 22,
+					24,
+					700,
+					stageTextColor,
+					"Rajdhani"
+				);
+			});
+			ctx.textAlign = "left";
+			ctx.textBaseline = "top";
+		});
+
+		for (let minute = minStart; minute <= maxEnd; minute += 60) {
+			const y = gridY + (minute - minStart) * pxPerMinute;
+			ctx.strokeStyle = "rgba(180, 208, 255, 0.16)";
+			ctx.lineWidth = 2;
+			ctx.beginPath();
+			ctx.moveTo(frame.x + axisWidth, y);
+			ctx.lineTo(frame.x + frame.width, y);
+			ctx.stroke();
+
+			ctx.fillStyle = "#f1f5ff";
+			ctx.font = '700 28px "Rajdhani", sans-serif';
+			ctx.fillText(this.formatTimelineHour(minute).replace("AM", " AM").replace("PM", " PM"), frame.x + 6, y - 16);
+		}
+
+		sortedStages.forEach((stage, index) => {
+			const colX = frame.x + axisWidth + index * columnWidth;
+			ctx.strokeStyle = "rgba(180, 208, 255, 0.12)";
+			ctx.lineWidth = 2;
+			ctx.beginPath();
+			ctx.moveTo(colX, gridY);
+			ctx.lineTo(colX, gridY + gridHeight);
+			ctx.stroke();
+		});
+
+		entries.forEach((entry) => {
+			const stageIndex = sortedStages.findIndex(
+				(stage) => stage.name === entry.stageName
+			);
+			if (stageIndex === -1) return;
+			const x = frame.x + axisWidth + stageIndex * columnWidth + 6;
+			const width = columnWidth - 12;
+			const y = gridY + (entry.startMinutes - minStart) * pxPerMinute + 4;
+			const height = Math.max(72, (entry.endMinutes - entry.startMinutes) * pxPerMinute - 8);
+			const blockFill = entry.stageColor || "#62b8ff";
+			const textColor = this.getContrastTextColor(blockFill);
+			const secondaryTextColor =
+				textColor === "#081126" ? "rgba(8, 17, 38, 0.78)" : "rgba(248, 251, 255, 0.84)";
+
+			ctx.fillStyle = blockFill;
+			this.roundRect(ctx, x, y, width, height, 14);
+			ctx.fill();
+
+			ctx.strokeStyle =
+				textColor === "#081126"
+					? "rgba(8,17,38,0.28)"
+					: "rgba(255,255,255,0.28)";
+			ctx.lineWidth = 2;
+			this.roundRect(ctx, x, y, width, height, 14);
+			ctx.stroke();
+
+			if (entry.allTogether) {
+				ctx.fillStyle = "#50e3c2";
+				this.roundRect(ctx, x + 8, y + 8, width - 16, 10, 5);
+				ctx.fill();
+			}
+
+			const titleFontSize = height > 140 ? 24 : height > 100 ? 21 : 18;
+			const timeFontSize = height > 100 ? 18 : 16;
+			const titleLines = this.wrapText(
+				ctx,
+				entry.title,
+				width - (height > 116 ? 48 : 18),
+				`700 ${titleFontSize}px "Rajdhani", sans-serif`,
+				height > 130 ? 3 : 2
+			);
+			ctx.textAlign = "center";
+			ctx.textBaseline = "top";
+			titleLines.forEach((line, lineIndex) => {
+				this.drawFittedText(
+					ctx,
+					line,
+					x + width / 2,
+					y + 18 + lineIndex * (titleFontSize + 4),
+					width - (height > 116 ? 54 : 18),
+					titleFontSize,
+					700,
+					textColor,
+					"Rajdhani"
+				);
+			});
+
+			this.drawFittedText(
+				ctx,
+				entry.startTime,
+				x + width / 2,
+				y + height - 34,
+				width - 18,
+				timeFontSize,
+				700,
+				secondaryTextColor,
+				"Rajdhani"
+			);
+
+			if (entry.icons.length && height > 116) {
+				this.drawStackedTimelineIcons(
+					ctx,
+					entry.icons,
+					x + width - 12,
+					y + 12
+				);
+			}
+
+			ctx.textAlign = "left";
+			ctx.textBaseline = "top";
+		});
+	}
+
+	drawStackedTimelineIcons(ctx, icons, rightX, topY) {
+		const visibleIcons = icons.slice(0, 3);
+		visibleIcons.forEach((icon, index) => {
+			const size = 24;
+			const x = rightX - size;
+			const y = topY + index * (size + 6);
+			ctx.fillStyle =
+				icon.state === "must-see"
+					? this.darkenColor(icon.color, 0.25)
+					: icon.color;
+			this.roundRect(ctx, x, y, size, size, 8);
+			ctx.fill();
+			ctx.fillStyle = "#0a1226";
+			ctx.font = '800 12px "Orbitron", sans-serif';
+			ctx.textAlign = "center";
+			ctx.textBaseline = "middle";
+			ctx.fillText(icon.label, x + size / 2, y + size / 2 + 1);
+		});
+		ctx.textAlign = "left";
+		ctx.textBaseline = "top";
+	}
+
+	drawFittedText(
+		ctx,
+		text,
+		centerX,
+		y,
+		maxWidth,
+		fontSize,
+		fontWeight,
+		color,
+		fontFamily = "Rajdhani"
+	) {
+		const content = String(text || "");
+		ctx.save();
+		ctx.fillStyle = color;
+		ctx.textAlign = "center";
+		ctx.textBaseline = "middle";
+		ctx.font = `${fontWeight} ${fontSize}px "${fontFamily}", sans-serif`;
+		const measured = ctx.measureText(content).width || 1;
+		const scaleX = Math.min(1.18, Math.max(0.82, maxWidth / measured));
+		ctx.translate(centerX, y);
+		ctx.scale(scaleX, 1);
+		ctx.fillText(content, 0, fontSize * 0.5);
+		ctx.restore();
+	}
+
+	getContrastTextColor(backgroundColor) {
+		const rgb = this.parseColorToRgb(backgroundColor);
+		if (!rgb) return "#081126";
+		const luminance = this.getRelativeLuminance(rgb.r, rgb.g, rgb.b);
+		return luminance > 0.52 ? "#081126" : "#f8fbff";
+	}
+
+	parseColorToRgb(color) {
+		const value = String(color || "").trim();
+		if (!value) return null;
+		if (value.startsWith("#")) {
+			const hex = value.slice(1);
+			const normalized =
+				hex.length === 3
+					? hex
+							.split("")
+							.map((char) => char + char)
+							.join("")
+					: hex;
+			if (normalized.length !== 6) return null;
+			return {
+				r: parseInt(normalized.slice(0, 2), 16),
+				g: parseInt(normalized.slice(2, 4), 16),
+				b: parseInt(normalized.slice(4, 6), 16),
+			};
+		}
+		const rgbMatch = value.match(/rgba?\(([^)]+)\)/i);
+		if (rgbMatch) {
+			const parts = rgbMatch[1].split(",").map((part) => parseFloat(part.trim()));
+			if (parts.length >= 3) {
+				return { r: parts[0], g: parts[1], b: parts[2] };
+			}
+		}
+		const hslMatch = value.match(/hsla?\(([^)]+)\)/i);
+		if (hslMatch) {
+			const parts = hslMatch[1]
+				.replace(/\//g, " ")
+				.split(/[,\s]+/)
+				.filter(Boolean);
+			if (parts.length >= 3) {
+				const h = parseFloat(parts[0]);
+				const s = parseFloat(parts[1]) / 100;
+				const l = parseFloat(parts[2]) / 100;
+				return this.hslToRgb(h, s, l);
+			}
+		}
+		return null;
+	}
+
+	hslToRgb(h, s, l) {
+		const hue = ((h % 360) + 360) % 360 / 360;
+		if (s === 0) {
+			const gray = Math.round(l * 255);
+			return { r: gray, g: gray, b: gray };
+		}
+		const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+		const p = 2 * l - q;
+		const toRgb = (t) => {
+			let temp = t;
+			if (temp < 0) temp += 1;
+			if (temp > 1) temp -= 1;
+			if (temp < 1 / 6) return p + (q - p) * 6 * temp;
+			if (temp < 1 / 2) return q;
+			if (temp < 2 / 3) return p + (q - p) * (2 / 3 - temp) * 6;
+			return p;
+		};
+		return {
+			r: Math.round(toRgb(hue + 1 / 3) * 255),
+			g: Math.round(toRgb(hue) * 255),
+			b: Math.round(toRgb(hue - 1 / 3) * 255),
+		};
+	}
+
+	getRelativeLuminance(r, g, b) {
+		const transform = (channel) => {
+			const normalized = channel / 255;
+			return normalized <= 0.03928
+				? normalized / 12.92
+				: ((normalized + 0.055) / 1.055) ** 2.4;
+		};
+		const rr = transform(r);
+		const gg = transform(g);
+		const bb = transform(b);
+		return 0.2126 * rr + 0.7152 * gg + 0.0722 * bb;
+	}
+
+	drawLockscreenEntryCard(ctx, entry, frame) {
+		ctx.fillStyle = "rgba(8,14,37,0.88)";
+		this.roundRect(ctx, frame.x, frame.y, frame.width, frame.height, 32);
+		ctx.fill();
+
+		ctx.strokeStyle = "rgba(132,173,255,0.18)";
+		ctx.lineWidth = 2;
+		this.roundRect(ctx, frame.x, frame.y, frame.width, frame.height, 32);
+		ctx.stroke();
+
+		if (entry.allTogether) {
+			ctx.fillStyle = "rgba(80, 227, 194, 0.22)";
+			this.roundRect(ctx, frame.x, frame.y, frame.width, frame.height, 32);
+			ctx.fill();
+
+			ctx.fillStyle = "#50e3c2";
+			this.roundRect(ctx, frame.x + 22, frame.y + 20, 132, 30, 15);
+			ctx.fill();
+			ctx.fillStyle = "#07241f";
+			ctx.font = '700 18px "Rajdhani", sans-serif';
+			ctx.textBaseline = "middle";
+			ctx.fillText("ALL TOGETHER", frame.x + 36, frame.y + 35);
+			ctx.textBaseline = "top";
+		}
+
+		const timeWidth = 185;
+		const padX = 32;
+		const textX = frame.x + timeWidth + 28;
+		const availableTextWidth = frame.width - timeWidth - 60;
+		const titleStartY = frame.y + (entry.allTogether ? 58 : 20);
+		const titleLines = this.wrapText(
+			ctx,
+			entry.title,
+			Math.max(260, availableTextWidth - 8),
+			'700 42px "Rajdhani", sans-serif',
+			2
+		);
+
+		ctx.fillStyle = "#7ad0ff";
+		ctx.font = '700 34px "Rajdhani", sans-serif';
+		ctx.textBaseline = "top";
+		ctx.fillText(entry.startTime, frame.x + padX, frame.y + 26);
+
+		this.drawInterestIcons(ctx, entry.icons, frame.x + padX, frame.y + frame.height - 48);
+
+		ctx.fillStyle = "#f3f7ff";
+		ctx.font = '700 42px "Rajdhani", sans-serif';
+		titleLines.forEach((line, lineIndex) => {
+			ctx.fillText(line, textX, titleStartY + lineIndex * 42);
+		});
+
+		ctx.fillStyle = "#b0c1eb";
+		ctx.font = '600 30px "Rajdhani", sans-serif';
+		const stageY =
+			frame.y +
+			Math.min(frame.height - 52, titleStartY - frame.y + titleLines.length * 42 + 18);
+		ctx.fillText(entry.stageName, textX, stageY);
+	}
+
+	drawInterestIcons(ctx, icons, x, baselineY) {
+		const chipWidth = 48;
+		const chipHeight = 34;
+		const gap = 12;
+		icons.forEach((icon, index) => {
+			const chipX = x + index * (chipWidth + gap);
+			const chipY = baselineY - chipHeight;
+			ctx.fillStyle = icon.state === "must-see"
+				? this.darkenColor(icon.color, 0.25)
+				: icon.color;
+			this.roundRect(ctx, chipX, chipY, chipWidth, chipHeight, 17);
+			ctx.fill();
+
+			if (icon.state === "must-see") {
+				ctx.strokeStyle = "rgba(255,220,132,0.95)";
+				ctx.lineWidth = 2;
+				this.roundRect(ctx, chipX, chipY, chipWidth, chipHeight, 17);
+				ctx.stroke();
+				ctx.fillStyle = "#ffd978";
+				ctx.font = '700 16px "Rajdhani", sans-serif';
+				ctx.fillText("★", chipX + chipWidth - 16, chipY - 2);
+			}
+
+			ctx.fillStyle = "#081126";
+			ctx.font = '800 18px "Orbitron", sans-serif';
+			ctx.textAlign = "center";
+			ctx.textBaseline = "middle";
+			ctx.fillText(icon.label, chipX + chipWidth / 2, chipY + chipHeight / 2 + 1);
+			ctx.textAlign = "left";
+			ctx.textBaseline = "top";
+		});
+	}
+
+	wrapText(ctx, text, maxWidth, font, maxLines = 2) {
+		ctx.font = font;
+		const words = String(text || "").split(/\s+/).filter(Boolean);
+		const lines = [];
+		let current = "";
+
+		words.forEach((word) => {
+			const test = current ? `${current} ${word}` : word;
+			if (ctx.measureText(test).width <= maxWidth || !current) {
+				current = test;
+			} else {
+				lines.push(current);
+				current = word;
+			}
+		});
+		if (current) lines.push(current);
+
+		if (lines.length <= maxLines) return lines;
+		const trimmed = lines.slice(0, maxLines);
+		while (
+			trimmed[trimmed.length - 1] &&
+			ctx.measureText(`${trimmed[trimmed.length - 1]}…`).width > maxWidth
+		) {
+			trimmed[trimmed.length - 1] = trimmed[trimmed.length - 1].slice(0, -1);
+		}
+		trimmed[trimmed.length - 1] = `${trimmed[trimmed.length - 1]}…`;
+		return trimmed;
+	}
+
+	roundRect(ctx, x, y, width, height, radius) {
+		const r = Math.min(radius, width / 2, height / 2);
+		ctx.beginPath();
+		ctx.moveTo(x + r, y);
+		ctx.arcTo(x + width, y, x + width, y + height, r);
+		ctx.arcTo(x + width, y + height, x, y + height, r);
+		ctx.arcTo(x, y + height, x, y, r);
+		ctx.arcTo(x, y, x + width, y, r);
+		ctx.closePath();
+	}
 }
 
 // Initialize the festival planner when the DOM is loaded
@@ -2151,6 +3167,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 // Add some helpful keyboard shortcuts
 document.addEventListener("keydown", async (e) => {
+	if (e.key === "Escape" && window.festivalPlanner) {
+		window.festivalPlanner.closeLockscreenExportModal();
+	}
+
 	if (e.ctrlKey || e.metaKey) {
 		switch (e.key) {
 			case "s":

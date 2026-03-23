@@ -55,6 +55,10 @@ body::after {
 	transform: translateY(-25vh);
 }
 
+body.modal-open {
+	overflow: hidden;
+}
+
 .container {
 	max-width: 1400px;
 	margin: 0 auto;
@@ -218,6 +222,11 @@ body::after {
 	justify-self: end;
 }
 
+#exportLockscreenBtn {
+	border-color: rgba(181, 133, 255, 0.45);
+	color: #efe3ff;
+}
+
 .schedule-mode-control {
 	display: flex;
 	flex-direction: column;
@@ -273,6 +282,14 @@ body::after {
 	border-color: rgba(171, 130, 255, 0.8);
 	color: #ffffff;
 	box-shadow: 0 0 16px rgba(171, 130, 255, 0.5);
+}
+
+.btn-secondary:disabled,
+.btn-primary:disabled {
+	opacity: 0.45;
+	cursor: not-allowed;
+	box-shadow: none;
+	transform: none;
 }
 
 .btn-secondary.active {
@@ -1417,5 +1434,281 @@ body::after {
 		font-size: 0.5rem;
 		min-width: 14px;
 		padding: 1px 3px;
+	}
+}
+
+.lockscreen-modal {
+	position: fixed;
+	inset: 0;
+	display: none;
+	z-index: 2000;
+}
+
+.lockscreen-modal.show {
+	display: block;
+}
+
+.lockscreen-modal-backdrop {
+	position: absolute;
+	inset: 0;
+	background: rgba(2, 5, 18, 0.78);
+	backdrop-filter: blur(12px);
+}
+
+.lockscreen-modal-panel {
+	position: relative;
+	max-width: 1180px;
+	width: calc(100vw - 32px);
+	max-height: calc(100vh - 32px);
+	overflow: auto;
+	margin: 16px auto;
+	padding: 28px;
+	border-radius: 28px;
+	border: 1px solid rgba(132, 173, 255, 0.28);
+	background: linear-gradient(160deg, rgba(13, 20, 52, 0.97), rgba(7, 10, 25, 0.96));
+	box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.lockscreen-modal-header {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 20px;
+	margin-bottom: 24px;
+}
+
+.lockscreen-modal-header h2 {
+	font-family: "Orbitron", sans-serif;
+	font-size: 1.4rem;
+	letter-spacing: 0.08em;
+	margin-bottom: 8px;
+}
+
+.lockscreen-modal-header p {
+	color: var(--ultra-muted);
+	font-size: 1rem;
+	max-width: 620px;
+}
+
+.lockscreen-modal-close {
+	width: 42px;
+	height: 42px;
+	border-radius: 50%;
+	border: 1px solid rgba(132, 173, 255, 0.3);
+	background: rgba(14, 20, 52, 0.85);
+	color: #edf3ff;
+	font-size: 1.6rem;
+	cursor: pointer;
+}
+
+.lockscreen-modal-body {
+	display: grid;
+	grid-template-columns: minmax(250px, 320px) minmax(0, 1fr);
+	gap: 24px;
+	align-items: start;
+}
+
+.lockscreen-controls {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	padding: 18px;
+	border-radius: 22px;
+	background: rgba(8, 13, 35, 0.72);
+	border: 1px solid rgba(132, 173, 255, 0.14);
+}
+
+.lockscreen-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.lockscreen-field span {
+	font-size: 0.8rem;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: #a9bbec;
+}
+
+.lockscreen-field select {
+	padding: 12px 14px;
+	border-radius: 14px;
+	border: 1px solid rgba(132, 173, 255, 0.36);
+	background: rgba(10, 16, 40, 0.95);
+	color: #edf3ff;
+	font: inherit;
+}
+
+.lockscreen-actions {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	margin-top: 8px;
+}
+
+.lockscreen-preview-shell {
+	padding: 18px;
+	border-radius: 22px;
+	background: rgba(8, 13, 35, 0.72);
+	border: 1px solid rgba(132, 173, 255, 0.14);
+}
+
+.lockscreen-preview-status {
+	margin-bottom: 14px;
+	color: #b9caf1;
+	font-size: 0.98rem;
+}
+
+.lockscreen-preview-frame {
+	display: flex;
+	justify-content: center;
+	align-items: flex-start;
+	min-height: 520px;
+	padding: 18px;
+	border-radius: 28px;
+	background:
+		radial-gradient(circle at top, rgba(98, 184, 255, 0.1), transparent 38%),
+		linear-gradient(180deg, rgba(18, 29, 69, 0.95), rgba(7, 12, 30, 0.98));
+	border: 1px solid rgba(132, 173, 255, 0.16);
+}
+
+.lockscreen-preview-image {
+	width: min(100%, 320px);
+	border-radius: 34px;
+	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.46);
+	display: none;
+}
+
+.all-together-toggle {
+	position: absolute;
+	top: 8px;
+	left: 8px;
+	z-index: 20;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 9px 4px 6px;
+	border-radius: 999px;
+	border: 1px solid rgba(80, 227, 194, 0.28);
+	background: rgba(6, 20, 24, 0.8);
+	color: #bfeee3;
+	font: inherit;
+	font-size: 0.68rem;
+	font-weight: 700;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+	cursor: pointer;
+	backdrop-filter: blur(6px);
+}
+
+.all-together-toggle:hover {
+	border-color: rgba(80, 227, 194, 0.62);
+	color: #effffb;
+}
+
+.all-together-toggle.active {
+	background: rgba(80, 227, 194, 0.18);
+	border-color: rgba(80, 227, 194, 0.8);
+	color: #effffb;
+	box-shadow: 0 0 14px rgba(80, 227, 194, 0.24);
+}
+
+.all-together-toggle-dot {
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	background: rgba(80, 227, 194, 0.52);
+	box-shadow: 0 0 10px rgba(80, 227, 194, 0.35);
+}
+
+.all-together-toggle.active .all-together-toggle-dot {
+	background: #50e3c2;
+}
+
+.show.all-together-show,
+.chronological-show.all-together-show,
+.timeline-show.all-together-show {
+	box-shadow: 0 0 0 1px rgba(80, 227, 194, 0.5), 0 0 24px rgba(80, 227, 194, 0.12);
+}
+
+.show.all-together-show::before,
+.chronological-show.all-together-show::before {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 12px;
+	bottom: 12px;
+	width: 5px;
+	border-radius: 99px;
+	background: linear-gradient(180deg, #7af5dd 0%, #2ec8b6 100%);
+}
+
+.timeline-all-together-indicator {
+	position: absolute;
+	top: 10px;
+	right: 10px;
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	background: rgba(80, 227, 194, 0.22);
+	border: 1px solid rgba(80, 227, 194, 0.3);
+	opacity: 0;
+	transform: scale(0.8);
+	transition: all 0.25s ease;
+}
+
+.timeline-all-together-indicator.active {
+	opacity: 1;
+	transform: scale(1);
+	background: #50e3c2;
+	box-shadow: 0 0 12px rgba(80, 227, 194, 0.55);
+}
+
+@media (max-width: 768px) {
+	.all-together-toggle-text {
+		display: none;
+	}
+
+	.all-together-toggle {
+		left: auto;
+		top: auto;
+		right: 8px;
+		bottom: 8px;
+		padding-right: 6px;
+		background: rgba(6, 20, 24, 0.92);
+	}
+
+	.show,
+	.chronological-show {
+		padding-bottom: 42px;
+	}
+}
+
+@media (max-width: 900px) {
+	.lockscreen-modal-body {
+		grid-template-columns: 1fr;
+	}
+
+	.lockscreen-preview-frame {
+		min-height: 420px;
+	}
+}
+
+@media (max-width: 640px) {
+	.lockscreen-modal-panel {
+		width: calc(100vw - 16px);
+		margin: 8px auto;
+		padding: 18px;
+		border-radius: 22px;
+	}
+
+	.lockscreen-modal-header {
+		flex-direction: column;
+	}
+
+	.lockscreen-modal-close {
+		align-self: flex-end;
 	}
 }

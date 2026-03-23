@@ -60,6 +60,9 @@
 						</select>
 					</div>
 					<div class="view-toggles">
+						<button id="exportLockscreenBtn" class="btn-secondary">
+							Export Lockscreen
+						</button>
 						<button id="chronologicalToggle" class="btn-secondary">
 							Chronological
 						</button>
@@ -73,6 +76,72 @@
 				<div class="loading-placeholder">
 					<div class="loading-spinner"></div>
 					<p>Loading ULTRA festival schedule...</p>
+				</div>
+			</div>
+		</div>
+
+		<div id="lockscreenExportModal" class="lockscreen-modal" aria-hidden="true">
+			<div class="lockscreen-modal-backdrop" data-close-lockscreen-modal></div>
+			<div class="lockscreen-modal-panel" role="dialog" aria-modal="true" aria-labelledby="lockscreenModalTitle">
+				<div class="lockscreen-modal-header">
+					<div>
+						<h2 id="lockscreenModalTitle">Lockscreen Export</h2>
+						<p>Build a one-day iPhone lock screen PNG from your picks or the group’s picks.</p>
+					</div>
+					<button
+						type="button"
+						class="lockscreen-modal-close"
+						data-close-lockscreen-modal
+						aria-label="Close export modal"
+					>
+						×
+					</button>
+				</div>
+
+				<div class="lockscreen-modal-body">
+					<div class="lockscreen-controls">
+						<label class="lockscreen-field">
+							<span>Day</span>
+							<select id="lockscreenDaySelect"></select>
+						</label>
+						<label class="lockscreen-field">
+							<span>Schedule</span>
+							<select id="lockscreenSourceSelect">
+								<option value="all">All Shows</option>
+								<option value="my">Your Sets</option>
+								<option value="group">Group Sets</option>
+							</select>
+						</label>
+						<label class="lockscreen-field">
+							<span>Layout</span>
+							<select id="lockscreenLayoutSelect">
+								<option value="chronological">Chronological</option>
+								<option value="timeline">Timeline</option>
+							</select>
+						</label>
+
+						<div class="lockscreen-actions">
+							<button id="refreshLockscreenPreviewBtn" type="button" class="btn-secondary">
+								Refresh Preview
+							</button>
+							<button id="downloadLockscreenBtn" type="button" class="btn-primary">
+								Download PNG
+							</button>
+						</div>
+					</div>
+
+					<div class="lockscreen-preview-shell">
+						<div id="lockscreenPreviewStatus" class="lockscreen-preview-status">
+							Choose options to generate a preview.
+						</div>
+						<div class="lockscreen-preview-frame">
+							<img
+								id="lockscreenPreviewImage"
+								class="lockscreen-preview-image"
+								alt="Lockscreen export preview"
+							/>
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>
