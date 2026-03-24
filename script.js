@@ -2295,6 +2295,10 @@ class FestivalPlanner {
 			controlsContainer.appendChild(toggle);
 		}
 
+		if (toggle.parentElement !== controlsContainer) {
+			controlsContainer.appendChild(toggle);
+		}
+
 		toggle.dataset.show = showId;
 	}
 
