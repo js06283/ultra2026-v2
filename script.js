@@ -3,6 +3,7 @@ class FestivalPlanner {
 		this.attendees = new Map(); // Map of showId to Set of attendee names
 		this.attendeeStates = new Map(); // Map of showId to Map of name to state
 		this.comments = new Map(); // Map of showId to Array of comment objects
+		this.commentDrafts = new Map(); // Map of showId to in-progress comment text
 		this.allTogetherShows = new Set();
 		this.currentName = null;
 		this.currentDay = "all";
@@ -1749,6 +1750,11 @@ class FestivalPlanner {
 			e.stopPropagation();
 		});
 
+		const existingTextarea = commentsContainer.querySelector(".comment-textarea");
+		const wasFocused = existingTextarea === document.activeElement;
+		const draftText =
+			this.commentDrafts.get(showId) ?? existingTextarea?.value ?? "";
+
 		commentsContainer.innerHTML = "";
 
 		// Add comment input
@@ -1758,22 +1764,36 @@ class FestivalPlanner {
 			<textarea placeholder="Add a comment..." class="comment-textarea"></textarea>
 			<button class="comment-submit-btn">Add Comment</button>
 		`;
+		const textarea = commentInput.querySelector(".comment-textarea");
+		textarea.value = draftText;
+		textarea.addEventListener("input", (e) => {
+			this.commentDrafts.set(showId, e.target.value);
+		});
 
 		commentInput
 			.querySelector(".comment-submit-btn")
 			.addEventListener("click", async () => {
-				const textarea = commentInput.querySelector(".comment-textarea");
 				const text = textarea.value;
 				if (text.trim() && this.currentName) {
-					await this.addComment(showId, this.currentName, text);
-					textarea.value = "";
-					this.updateCommentsCount(showId);
+					this.commentDrafts.set(showId, "");
+					try {
+						await this.addComment(showId, this.currentName, text);
+						textarea.value = "";
+						this.updateCommentsCount(showId);
+					} catch (error) {
+						this.commentDrafts.set(showId, text);
+						throw error;
+					}
 				} else if (!this.currentName) {
 					this.showNotification("Please select your name first", "error");
 				}
 			});
 
 		commentsContainer.appendChild(commentInput);
+		if (wasFocused) {
+			textarea.focus();
+			textarea.setSelectionRange(draftText.length, draftText.length);
+		}
 
 		// Add existing comments
 		if (this.comments.has(showId) && this.comments.get(showId).length > 0) {
